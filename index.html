@@ -460,7 +460,7 @@ const ACT={
  D:[['Ponte de glúteos com elástico nos joelhos, pausa 2 s','2 × 15'],['Abdução deitado de lado (concha) com elástico','2 × 12 por lado'],['Passos laterais com elástico (monster walk)','2 × 10 por lado']]
 };
 /* variante de cada posto para o treino de hoje: roda sempre que o treino se repete */
-function rot(code){return S.history.filter(h=>h.code===code&&h.d<TODAY).length}
+function rot(code){return Math.max(0,Math.floor((Date.parse(TODAY)-Date.parse(S.start))/(7*864e5)))}
 function exList(code){const r=rot(code);return SESS[code].ex.map((sl,i)=>{const vi=r%sl.v.length;return Object.assign({},sl,sl.v[vi],{slot:i,vi,nv:sl.v.length})})}
 function allVar(code){return SESS[code].ex.flatMap(sl=>sl.v)}
 /* esforço por semana do ciclo (RIR = repetições em reserva) */
@@ -646,7 +646,7 @@ function exCard(ex,i,wk,deload,d){
  let hist='<p class="hist">Primeira vez: escolhe um peso em que acabas com 2–3 repetições de reserva.</p>';
  if(g){hist=`<p class="hist">Última vez com esta variante (${dshort(g.l.d)}): ${g.top?fmt(g.top)+' kg × ':''}${g.l.sets.map(x=>x.r).join(', ')}${g.top?'':' reps'}`+
    (g.hit&&!deload&&g.top?` · <span class="up">sobe para ${fmt(g.next)} kg</span>`:'')+'</p>'}
- return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR').replace(' rep em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.core?'Core':ex.iso?'Isolado':'Composto'} · variante ${ex.vi+1} de ${ex.nv}</p></div><span class="ex-idx">${pad(i+1)}</span></div>
+ return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR').replace(' rep em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.core?'Core':ex.iso?'Isolado':'Composto'} · versão ${ex.vi+1} de ${ex.nv} · muda para a semana</p></div><span class="ex-idx">${pad(i+1)}</span></div>
  ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
 }
@@ -658,7 +658,7 @@ function vHoje(){
  <p class="eyebrow">Escolhe o treino de hoje · a app sabe o próximo</p>
  <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Hoje</small>':c===nx?'<small class="nx">Próxima</small>':''}</button>`).join('')}</div>
  <div class="nextline"><span>Próximo treino</span><b><i class="dot p-${SESS[nx].cls}"></i>${nx} · ${SESS[nx].name}</b></div>
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Cada exercício está noutra variante desta vez: tenta bater a última vez que fizeste essa variante (+1 rep ou +peso).`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Esta semana cada exercício muda de máquina ou forma de o fazer, para não ser repetitivo. Tenta bater a última vez que fizeste esta versão (+1 rep ou +peso).`}</div>`;
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
  <div class="card stack"><div><p class="eyebrow">Fase 1 · 10–12 min</p><h3>Aquecimento e ativação</h3></div>
@@ -727,7 +727,7 @@ function vPlano(){
   <li><b>Ordem de cada treino:</b> ${FLAV==='mary'?'1) ativação, 2) por músculo — o composto e logo o isolado desse músculo, antes de passar ao seguinte, 3) core no fim.':'1) ativação leve, 2) compostos pesados, do músculo grande (peito, costas, coxas) para o pequeno (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.'}</li>
   <li><b>Esforço sobe ao longo do ciclo:</b> semana 1 com 3 repetições em reserva (RIR), semana 2 com 2, semana 3 com 1–2, semana 4 com 1 (isolamento até 0–1). Técnica limpa vale mais que peso.</li>
   <li><b>Volume:</b> nas semanas 3 e 4 os exercícios de isolamento ganham +1 série.</li>
-  <li><b>Variantes:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). Sempre que repetes o treino, muda para a seguinte. A app compara sempre com a última vez que fizeste a mesma variante.</li>
+  <li><b>Variedade semanal:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). A app muda de versão a cada semana, para o estímulo não ser sempre igual, e compara sempre com a última vez que fizeste a mesma versão.</li>
   <li><b>Progressão dupla:</b> quando fazes o topo da faixa em todas as séries, sobe o peso (≈2 kg tronco, 5 kg pernas). A app avisa no ecrã Hoje.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
   <li><b>Descarga:</b> a cada 5.ª semana, metade das séries e −10% de peso. Tendões e articulações precisam disto.</li>
