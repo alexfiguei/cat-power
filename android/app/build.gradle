@@ -7,8 +7,8 @@ android {
         applicationId "pt.catpower.app"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode (System.getenv("CATPOWER_VERSION_CODE") ?: "1").toInteger()
-        versionName "1.0." + (System.getenv("CATPOWER_VERSION_CODE") ?: "1")
+        versionCode((System.getenv("CATPOWER_VERSION_CODE") ?: "1").toInteger())
+        versionName("1.0." + (System.getenv("CATPOWER_VERSION_CODE") ?: "1"))
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
