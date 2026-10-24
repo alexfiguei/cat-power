@@ -705,7 +705,13 @@ function vPlano(){
   <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div></div>`;
  Object.entries(SESS).forEach(([c,s])=>{
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
-  <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${exList(c).map(ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary>${ex.img?`<div style="margin-top:8px">${pics(ex)}</div>`:''}<ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details>`).join('')}</div></div>`;
+  <p class="eyebrow" style="margin-top:12px">Fase 1 · Ativação</p><div>${ACT[c].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
+  <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">`;
+  let ph=0;
+  exList(c).forEach(ex=>{const f=ex.core?4:ex.iso?3:2;
+   if(f!==ph){ph=f;h+=`<p class="eyebrow" style="margin-top:8px">Fase ${f===4?(c==='B'||c==='D'?4:3):f} · ${f===2?'Compostos pesados (multiarticulares)':f===3?'Isolamento':'Core'}</p>`}
+   h+=`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary>${ex.img?`<div style="margin-top:8px">${pics(ex)}</div>`:''}<ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details>`});
+  h+=`</div></div>`;
  });
  h+=`<div class="card stack"><h2>Regras do jogo</h2><ul class="list">
   <li><b>Ordem de cada treino:</b> 1) aquecimento e ativação leve, 2) compostos pesados (vários músculos e articulações), 3) isolamento, 4) core no fim.</li>
