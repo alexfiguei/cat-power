@@ -7,6 +7,15 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
+<script>
+/* Duas versões no mesmo site: a do dono (Cat Power) e a da Mary (abre com ?u=mary e fica memorizada) */
+(function(){var q=new URLSearchParams(location.search).get('u'),f=q;
+ try{if(q)localStorage.setItem('cp_flavor',q);f=localStorage.getItem('cp_flavor')||q}catch(e){}
+ window.FLAV=f==='mary'?'mary':'cat';window.APPNAME=FLAV==='mary'?'Mary Amor Power':'Cat Power';
+ if(FLAV==='mary'){document.documentElement.classList.add('mary');
+  document.querySelector('link[rel=manifest]').href='manifest-mary.webmanifest';
+  document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(function(x){x.href='icons/mary-192.png'})}})();
+</script>
 <style>:root{color-scheme:light;--sat:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px));--sab:max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px));--sal:max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px));--sar:max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px));padding-top:var(--sat);padding-bottom:var(--sab)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
 <title>Cat Power</title>
 <meta name="claude:viewport-fit-sides" content="cover">
@@ -18,12 +27,13 @@
 :root{
   --bg:#F5F7F8; --surface:#FFFFFF; --ink:#15202A; --muted:#5B6975; --line:#D4DBE0; --soft:#E3E8EC;
   --blue:#1F5AD6; --red:#CF3A2C; --yellow:#E7B11C; --green:#2C8A4E; --ok:#2C8A4E; --warn:#B7791F;
-  --onplate:#FFFFFF; --onyellow:#1B1B12;
+  --onplate:#FFFFFF; --onyellow:#1B1B12; --accent:var(--yellow);
   --display:"Barlow Condensed","Arial Narrow",Arial,sans-serif;
   --body:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;
 }
 /* Sempre claro, mesmo com o telemóvel em modo escuro */
 :root,:root[data-theme="dark"]{color-scheme:light}
+html.mary{--accent:#E8457A}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
@@ -194,7 +204,7 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 <body>
 
 
-<div class="wrap"><header class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 5l10 8h10l10-8v19c0 7.5-6.5 13-15 13S5 31.5 5 24z" fill="var(--ink)"/><path d="M12.5 22.5l5.5 2M27.5 22.5l-5.5 2" stroke="var(--yellow)" stroke-width="2.6" stroke-linecap="round"/></svg><div><b>Cat Power</b><small>O teu treino. O teu ritmo.</small></div></header><div id="app"></div></div>
+<div class="wrap"><header class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 5l10 8h10l10-8v19c0 7.5-6.5 13-15 13S5 31.5 5 24z" fill="var(--ink)"/><path d="M12.5 22.5l5.5 2M27.5 22.5l-5.5 2" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round"/></svg><div><b id="appname">Cat Power</b><small>O teu treino. O teu ritmo.</small></div></header><div id="app"></div></div>
 
 <div id="timer" hidden role="timer" aria-live="polite">
   <div class="tt"><div id="t-time">1:30</div><div id="t-label">Descanso</div></div>
@@ -291,15 +301,63 @@ const SCHED={0:'rest',1:'A',2:'B',3:'walk',4:'C',5:'D',6:'walk'};
 const DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DAYS_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
 
+/* nutrição por 100 g/ml (ou por unidade quando u:'un'); g = grupo: p proteína, c hidratos, f gordura, x fixo */
 const MEALS=[
- {t:'07:30',n:'Pequeno-almoço',it:['80 g flocos de aveia','300 ml leite meio-gordo','1 banana','3 ovos mexidos'],k:760,p:40,c:97,f:26},
- {t:'10:30',n:'Meio da manhã',it:['150 g skyr ou iogurte grego magro','20 g nozes','1 maçã'],k:325,p:19,c:34,f:13},
- {t:'13:00',n:'Almoço',it:['150 g frango ou peru (peso cru)','110 g arroz (peso cru)','200 g legumes','10 ml azeite'],k:700,p:45,c:97,f:13},
- {t:'16:30',n:'Lanche antes do treino',it:['80 g pão integral','1 lata de atum ao natural','1 banana'],k:395,p:29,c:63,f:4},
- {t:'20:00',n:'Jantar, depois do treino',it:['150 g salmão, pescada ou carne magra','250 g batata-doce','200 g legumes','5 ml azeite'],k:625,p:37,c:60,f:25},
- {t:'22:30',n:'Ceia',it:['200 ml leite meio-gordo','2 tostas integrais','15 g manteiga de amendoim'],k:260,p:13,c:27,f:12}
+ {t:'07:30',n:'Pequeno-almoço',it:[
+  {q:80,u:'g',n:'flocos de aveia',g:'c',mn:30,k:370,p:13,c:60,f:7},
+  {q:300,u:'ml',n:'leite meio-gordo',g:'c',mn:150,k:46,p:3.3,c:4.8,f:1.6},
+  {q:1,u:'un',n:['banana','bananas'],g:'x',k:105,p:1.3,c:27,f:0.4},
+  {q:3,u:'un',n:['ovo mexido','ovos mexidos'],g:'p',k:72,p:6.3,c:0.4,f:4.8}]},
+ {t:'10:30',n:'Meio da manhã',it:[
+  {q:150,u:'g',n:'skyr ou iogurte grego magro',g:'p',k:63,p:11,c:4,f:0.2},
+  {q:20,u:'g',n:'nozes',g:'f',k:654,p:15,c:14,f:65},
+  {q:1,u:'un',n:['maçã','maçãs'],g:'x',k:80,p:0.4,c:21,f:0.3}]},
+ {t:'13:00',n:'Almoço',it:[
+  {q:150,u:'g',n:'frango ou peru (peso cru)',g:'p',k:110,p:23,c:0,f:1.5},
+  {q:110,u:'g',n:'arroz (peso cru)',g:'c',mn:40,k:355,p:7,c:78,f:0.6},
+  {q:200,u:'g',n:'legumes',g:'x',k:30,p:2,c:5,f:0.3},
+  {q:10,u:'ml',n:'azeite',g:'f',k:820,p:0,c:0,f:91}]},
+ {t:'16:30',n:'Lanche antes do treino',it:[
+  {q:80,u:'g',n:'pão integral',g:'c',mn:40,k:250,p:9,c:43,f:3.5},
+  {q:1,u:'un',n:['lata de atum ao natural','latas de atum ao natural'],g:'p',k:90,p:20,c:0,f:1},
+  {q:1,u:'un',n:['banana','bananas'],g:'c',opt:1,k:105,p:1.3,c:27,f:0.4}]},
+ {t:'20:00',n:'Jantar, depois do treino',it:[
+  {q:150,u:'g',n:'salmão, pescada ou carne magra',g:'p',k:150,p:21,c:0,f:7},
+  {q:250,u:'g',n:'batata-doce',g:'c',mn:100,k:86,p:1.6,c:20,f:0.1},
+  {q:200,u:'g',n:'legumes',g:'x',k:30,p:2,c:5,f:0.3},
+  {q:5,u:'ml',n:'azeite',g:'f',k:820,p:0,c:0,f:91}]},
+ {t:'22:30',n:'Ceia',it:[
+  {q:200,u:'ml',n:'leite meio-gordo',g:'c',mn:150,k:46,p:3.3,c:4.8,f:1.6},
+  {q:2,u:'un',n:['tosta integral','tostas integrais'],g:'c',k:40,p:1.5,c:7,f:0.6},
+  {q:15,u:'g',n:'manteiga de amendoim',g:'f',k:590,p:25,c:20,f:50}]}
 ];
-const PLAN_K=MEALS.reduce((a,m)=>a+m.k,0),PLAN_P=MEALS.reduce((a,m)=>a+m.p,0),PLAN_C=MEALS.reduce((a,m)=>a+m.c,0),PLAN_F=MEALS.reduce((a,m)=>a+m.f,0);
+function itMac(i,q){const m=i.u==='un'?q:q/100;return{k:i.k*m,p:i.p*m,c:i.c*m,f:i.f*m}}
+/* quantidade de cada alimento para os fatores de cada grupo, com mínimos realistas */
+function itQ(i,fac,exact){const f=fac[i.g]||1;
+ if(i.opt&&f<0.6)return 0;
+ if(i.u==='un')return i.g==='x'||i.opt?i.q:Math.max(1,Math.round(i.q*f));
+ const raw=Math.max(i.mn||5,i.q*f);if(exact)return raw;const st=i.u==='ml'?50:5;return Math.max(i.mn||5,Math.round(raw/st)*st)}
+function itTxt(i,q){return i.u==='un'?`${q} ${q===1?i.n[0]:i.n[1]}`:`${q} ${i.u} ${i.n}`}
+/* ajusta as porções: proteína para o alvo de proteína, gordura para o alvo de gordura, hidratos para fechar as calorias */
+function mealPlan(t){
+ const ML=t.kcal<2000?MEALS.slice(0,5):MEALS;
+ const fac={p:1,c:1,f:1,x:1},cl=x=>Math.min(2.2,Math.max(0.1,x));
+ const tot=exact=>ML.reduce((a,m)=>{m.it.forEach(i=>{const M=itMac(i,itQ(i,fac,exact));a.k+=M.k;a.p+=M.p;a.f+=M.f});return a},{k:0,p:0,f:0});
+ for(let n=0;n<80;n++){let T=tot(true);fac.p=cl(fac.p*Math.pow(t.P/T.p,0.6));
+  T=tot(true);fac.f=cl(fac.f*Math.pow(t.F/T.f,0.6));
+  T=tot(true);fac.c=cl(fac.c*Math.pow(t.kcal/T.k,0.6))}
+ const meals=ML.map(m=>{const T={k:0,p:0,c:0,f:0},it=[];m.it.forEach(i=>{const q=itQ(i,fac);if(!q)return;const M=itMac(i,q);T.k+=M.k;T.p+=M.p;T.c+=M.c;T.f+=M.f;it.push(itTxt(i,q))});
+  return{t:m.t,n:m.n,it,k:Math.round(T.k),p:Math.round(T.p),c:Math.round(T.c),f:Math.round(T.f)}});
+ const T=meals.reduce((a,m)=>({k:a.k+m.k,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{k:0,p:0,c:0,f:0});
+ return{meals,T}}
+
+/* objetivos */
+const GOALS={
+ perder:{n:'Perder peso',kcal:-500,P:2.0,F:0.8,lo:-0.75,hi:-0.25,eb:'Défice moderado · −500 kcal',h1:'Comer para emagrecer'},
+ definir:{n:'Definir / tonificar',kcal:-250,P:2.0,F:0.9,lo:-0.4,hi:-0.1,eb:'Défice ligeiro · −250 kcal',h1:'Comer para definir'},
+ manter:{n:'Manter o peso',kcal:0,P:1.6,F:1.0,lo:-0.1,hi:0.1,eb:'Manutenção',h1:'Comer para manter'},
+ ganhar:{n:'Ganhar massa',kcal:300,P:2.0,F:1.0,lo:0.1,hi:0.3,eb:'Excedente ligeiro · +300 kcal',h1:'Comer para crescer'}
+};
 
 /* ---------- ESTADO ---------- */
 const $=s=>document.querySelector(s);
@@ -310,10 +368,12 @@ const fmt=n=>String(Math.round(n*100)/100).replace('.',',');
 const num=v=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
 const dshort=s=>s.slice(8,10)+'/'+s.slice(5,7);
 const KEY='massa47_v1';
-function defState(){return{profile:{age:47,h:184,w:86,act:1.55},adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:86}],drafts:{},sessions:[],hc:{on:false},watch:{},history:[],histV:0}}
+function defProfile(){return FLAV==='mary'?{sex:'f',age:null,h:164,w:65,act:1.55,goal:null}:{sex:'m',age:47,h:184,w:86,act:1.55,goal:'ganhar'}}
+function defState(){const p=defProfile();return{profile:p,setup:FLAV!=='mary',adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:p.w}],drafts:{},sessions:[],hc:{on:false},watch:{},history:[],histV:0}}
 function load(){try{const r=localStorage.getItem(KEY);if(r)return Object.assign(defState(),JSON.parse(r))}catch(e){}return defState()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 let S=load();
+S.profile=Object.assign(defProfile(),S.profile);
 
 /* ---------- HISTÓRICO: registo de cada treino guardado ---------- */
 const EXN={};Object.values(SESS).forEach(s=>s.ex.forEach(e=>EXN[e.id]=e.n));
@@ -344,8 +404,9 @@ function nextCode(){return after(todayCode()||ui.code)}
 function setToday(c){S.sessions=S.sessions.filter(x=>x.d!==TODAY);S.sessions.push({d:TODAY,code:c});S.sessions.sort((a,b)=>a.d<b.d?-1:1);save()}
 const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null};ui.code=todayCode()||suggested();
 
-function targets(){const p=S.profile;const bmr=10*p.w+6.25*p.h-5*p.age+5;const tdee=bmr*p.act;
- const kcal=Math.round((tdee+300+S.adj)/10)*10;const P=Math.round(2*p.w),F=Math.round(p.w),C=Math.round((kcal-P*4-F*9)/4);
+function goal(){return GOALS[S.profile.goal]||GOALS.ganhar}
+function targets(){const p=S.profile,G=goal(),age=p.age||30;const bmr=10*p.w+6.25*p.h-5*age+(p.sex==='f'?-161:5);const tdee=bmr*p.act;
+ const kcal=Math.max(p.sex==='f'?1300:1600,Math.round((tdee+G.kcal+S.adj)/10)*10);const P=Math.round(G.P*p.w),F=Math.round(G.F*p.w),C=Math.max(0,Math.round((kcal-P*4-F*9)/4));
  return{bmr:Math.round(bmr),tdee:Math.round(tdee),kcal,P,F,C}}
 function cycleWeek(){const days=Math.max(0,Math.floor((Date.parse(TODAY)-Date.parse(S.start))/864e5));return Math.floor(days/7)%5+1}
 function lastLog(id){const a=S.logs[id];return a&&a.length?a[a.length-1]:null}
@@ -468,7 +529,7 @@ function vHist(){
 function vPlano(){
  let h=`<div class="stack"><div><p class="eyebrow">4 treinos em rotação · ciclo de 5 semanas</p><h1>O teu plano</h1></div>
  <div class="card stack"><h3>Sem dias fixos</h3><div class="sched">${ORDER.map(c=>`<div class="srow"><b>${c}</b><i style="background:var(--${SESS[c].cls})"></i><span>${SESS[c].name}</span></div>`).join('')}</div>
-  <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.</p></div></div>`;
+  <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div></div>`;
  Object.entries(SESS).forEach(([c,s])=>{
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
   <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${s.ex.map(ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary><div style="margin-top:8px">${pics(ex)}</div><ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details>`).join('')}</div></div>`;
@@ -477,7 +538,7 @@ function vPlano(){
   <li><b>Esforço:</b> acaba cada série com 1–3 repetições em reserva (RIR). Técnica limpa vale mais que peso.</li>
   <li><b>Progressão dupla:</b> quando fazes o topo da faixa em todas as séries, sobe o peso (≈2 kg tronco, 5 kg pernas). A app avisa no ecrã Hoje.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
-  <li><b>Descarga:</b> a cada 5.ª semana, metade das séries e −10% de peso. Tendões e articulações aos 47 precisam disto.</li>
+  <li><b>Descarga:</b> a cada 5.ª semana, metade das séries e −10% de peso. Tendões e articulações precisam disto.</li>
   <li><b>Dor:</b> ardor no músculo é normal. Dor aguda na articulação = para e troca o exercício.</li>
   <li><b>Sono:</b> 7–8 h por noite. Sem sono não há massa.</li>
   <li><b>Antes de começar:</b> se há muito tempo não fazes análises e um check-up (tensão, coração), marca-o.</li>
@@ -487,36 +548,36 @@ function vPlano(){
 
 /* ---------- REFEIÇÕES ---------- */
 function vRef(){
- const t=targets(),diff=t.kcal-PLAN_K,g=Math.round(Math.abs(diff)/3.6/5)*5;
- const adj=Math.abs(diff)<60?'Este plano já bate com o teu alvo.':
-  (diff>0?`O teu alvo está ${diff} kcal acima do plano: junta ~${g} g de arroz cru (ou aveia) por dia.`:`O teu alvo está ${-diff} kcal abaixo do plano: tira ~${g} g de arroz cru (ou aveia) por dia.`);
- return `<div class="stack"><div><p class="eyebrow">Excedente ligeiro · +300 kcal</p><h1>Comer para crescer</h1></div>
+ const p=S.profile,t=targets(),G=goal(),age=p.age||30,mp=mealPlan(t),T=mp.T,per=Math.round(t.P/mp.meals.length/5)*5,agua=Math.round(p.w*0.035*2)/2;
+ const extra=p.goal==='ganhar'?'<li><b>Sem fome?</b> Batido: 300 ml leite, 50 g aveia, 1 banana, 20 g manteiga de amendoim ≈ 650 kcal.</li>':
+  (p.goal==='perder'||p.goal==='definir')?'<li><b>Fome?</b> Começa as refeições pelos legumes e pela proteína. Fruta inteira sacia mais do que sumo.</li><li><b>Sem pressa:</b> perder ½ kg por semana protege o músculo e dá energia para treinar.</li>':'';
+ return `<div class="stack"><div><p class="eyebrow">${G.eb}</p><h1>${G.h1}</h1></div>
  <div class="card stack"><h3>Alvo diário</h3><div class="macros num">
   <div class="macro"><b>${t.kcal}</b><small>kcal</small></div>
   <div class="macro"><b>${t.P}</b><small>Proteína g</small></div>
   <div class="macro"><b>${t.C}</b><small>Hidratos g</small></div>
   <div class="macro"><b>${t.F}</b><small>Gordura g</small></div></div>
-  <p class="muted" style="font-size:.92rem">Calculado para ${S.profile.age} anos, ${S.profile.h} cm, ${fmt(S.profile.w)} kg. Proteína a 2 g/kg, gordura a 1 g/kg, o resto em hidratos.${S.adj?` Inclui ajuste de ${S.adj>0?'+':''}${S.adj} kcal.`:''}</p></div>
- <div class="card"><h3>Um dia tipo</h3><p class="muted num" style="font-size:.9rem;margin-top:2px">≈ ${PLAN_K} kcal · ${PLAN_P} g P · ${PLAN_C} g H · ${PLAN_F} g G</p>
-  <div style="margin-top:6px">${MEALS.map(m=>`<div class="meal"><time class="num">${m.t}</time><div><b>${m.n}</b><ul>${m.it.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mm num">${m.k} kcal · ${m.p} g proteína</p></div></div>`).join('')}</div>
-  <p class="banner" style="margin-top:8px">${adj}</p></div>
+  <p class="muted" style="font-size:.92rem">Calculado para ${p.sex==='f'?'mulher':'homem'}, ${age} anos, ${p.h} cm, ${fmt(p.w)} kg · objetivo: ${G.n.toLowerCase()}. Proteína a ${fmt(G.P)} g/kg, gordura a ${fmt(G.F)} g/kg, o resto em hidratos.${S.adj?` Inclui ajuste de ${S.adj>0?'+':''}${S.adj} kcal.`:''}</p></div>
+ <div class="card"><h3>Um dia tipo</h3><p class="muted num" style="font-size:.9rem;margin-top:2px">≈ ${T.k} kcal · ${T.p} g P · ${T.c} g H · ${T.f} g G</p>
+  <div style="margin-top:6px">${mp.meals.map(m=>`<div class="meal"><time class="num">${m.t}</time><div><b>${m.n}</b><ul>${m.it.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mm num">${m.k} kcal · ${m.p} g proteína</p></div></div>`).join('')}</div>
+  <p class="banner" style="margin-top:8px">As quantidades são calculadas para o teu alvo. Quando mudas o peso ou o objetivo, o plano ajusta-se sozinho.</p></div>
  <div class="card stack"><h3>Trocas equivalentes</h3><div class="kv num">
   <span>110 g arroz cru</span><span>110 g massa crua · 450 g batata</span>
   <span>80 g aveia</span><span>120 g pão integral</span>
   <span>150 g frango cru</span><span>170 g pescada · 4 ovos + 2 claras</span>
   <span>150 g skyr</span><span>1 dose de whey (30 g)</span></div></div>
  <div class="card stack"><h3>Dicas que fazem diferença</h3><ul class="list">
-  <li><b>35–45 g de proteína por refeição.</b> Depois dos 40 o músculo precisa de doses maiores de cada vez para reagir.</li>
+  <li><b>≈ ${per} g de proteína por refeição.</b> Espalhar a proteína pelo dia ajuda o músculo${age>=40?', sobretudo depois dos 40':''}.</li>
   <li><b>Hidratos à volta do treino:</b> lanche 1–2 h antes, jantar com batata ou arroz depois.</li>
-  <li><b>Água:</b> 3 L por dia, mais 0,5 L por hora de treino.</li>
-  <li><b>Sem fome?</b> Batido: 300 ml leite, 50 g aveia, 1 banana, 20 g manteiga de amendoim ≈ 650 kcal.</li>
+  <li><b>Água:</b> ${fmt(agua)} L por dia, mais 0,5 L por hora de treino.</li>
+  ${extra}
   <li><b>Álcool</b> trava a recuperação e a síntese de proteína. Guarda para ocasiões.</li>
   <li><b>Pesa os alimentos</b> nas primeiras 2–3 semanas, até saberes as porções de olho.</li></ul></div>
  <div class="card stack"><h3>Suplementos (opcionais)</h3><ul class="list">
-  <li><b>Creatina monohidratada:</b> 3–5 g por dia, todos os dias, a qualquer hora. É o suplemento mais estudado para força e massa, também depois dos 40.</li>
+  <li><b>Creatina monohidratada:</b> 3–5 g por dia, todos os dias, a qualquer hora. É o suplemento mais estudado para força e massa muscular.</li>
   <li><b>Whey:</b> só se não chegares à proteína com comida.</li>
-  <li><b>Vitamina D:</b> no inverno muitos ficam baixos. Confirma em análises antes de tomar.</li></ul>
-  <p class="muted" style="font-size:.9rem">Se tens problemas renais ou tomas medicação, fala com o médico antes da creatina.</p></div></div>`;
+  <li><b>Vitamina D:</b> no inverno muitas pessoas ficam com valores baixos. Confirma em análises antes de tomar.</li></ul>
+  <p class="muted" style="font-size:.9rem">Se tens problemas renais, estás grávida ou tomas medicação, fala com o médico antes de tomar suplementos.</p></div></div>`;
 }
 
 /* ---------- EU ---------- */
@@ -551,28 +612,37 @@ function vWatchEu(){
   return `<div class="hist-row num"><b>${dshort(x.d)}</b><span class="dot p-${s?s.cls:'none'}" title="${x.code}"></span><span>Treino ${x.code}${w?` · ${w.dur} min${w.hrAvg?' · FC '+w.hrAvg:''}${w.kcal!=null?' · '+w.kcal+' kcal':''}`:''}</span></div>`}).join('');
  h+=rows?`<div><p class="eyebrow" style="margin-bottom:4px">Últimos treinos</p>${rows}</div>`:'';
  return h+'</div>'}
+function profForm(p){return `<div class="form">
+  <label>Sexo<select id="p-sex"><option value="f" ${p.sex==='f'?'selected':''}>Mulher</option><option value="m" ${p.sex!=='f'?'selected':''}>Homem</option></select></label>
+  <label>Idade<input id="p-age" inputmode="numeric" autocomplete="off" placeholder="anos" value="${p.age||''}"></label>
+  <label>Altura (cm)<input id="p-h" inputmode="numeric" autocomplete="off" value="${p.h}"></label>
+  <label>Peso (kg)<input id="p-w" inputmode="decimal" autocomplete="off" value="${fmt(p.w)}"></label>
+  <label class="full">Objetivo<select id="p-goal">${p.goal?'':'<option value="" selected disabled>Escolhe o teu objetivo</option>'}${Object.entries(GOALS).map(([k,g])=>`<option value="${k}" ${p.goal===k?'selected':''}>${g.n}</option>`).join('')}</select></label>
+  <label class="full">Atividade fora do ginásio<select id="p-act">
+   <option value="1.45" ${p.act==1.45?'selected':''}>Sentado a maior parte do dia</option>
+   <option value="1.55" ${p.act==1.55?'selected':''}>Misto: algum tempo de pé e a andar</option>
+   <option value="1.65" ${p.act==1.65?'selected':''}>Muito tempo de pé ou trabalho físico</option></select></label></div>`}
+function vSetup(){const m=FLAV==='mary';
+ return `<div class="stack"><div><p class="eyebrow">${m?'Olá, Mary':'Bem-vindo'}</p><h1>Vamos começar</h1></div>
+ <div class="card stack"><p>Preenche os teus dados. A app calcula as calorias e a alimentação para o teu objetivo e ajusta-se quando o peso muda.</p>
+  ${profForm(S.profile)}<button class="btn" data-act="setup">Começar</button></div>
+ <p class="muted" style="font-size:.9rem">Podes mudar tudo mais tarde no separador «Eu».</p></div>`}
 function vEu(){
- const p=S.profile,t=targets(),r=trend();
- let rec=`<p class="muted" style="font-size:.92rem">Com 3 ou mais registos em 10+ dias, a app diz-te se deves comer mais ou menos. Objetivo: +0,1 a +0,25 kg por semana (½ a 1 kg por mês).</p>`;
- if(r!==null){const rs=(r>=0?'+':'')+fmt(Math.round(r*100)/100)+' kg/semana';
-  if(r<0.1)rec=`<p><span class="pill warn">${rs}</span> Abaixo do alvo. Come mais 150 kcal por dia.</p><button class="btn sm" data-act="adj" data-v="150">Aplicar +150 kcal</button>`;
-  else if(r>0.3)rec=`<p><span class="pill warn">${rs}</span> Rápido demais: vai ser sobretudo gordura. Tira 150 kcal por dia.</p><button class="btn sm" data-act="adj" data-v="-150">Aplicar −150 kcal</button>`;
+ const p=S.profile,t=targets(),r=trend(),G=goal(),sg=x=>(x>0?'+':'')+fmt(x);
+ let rec=`<p class="muted" style="font-size:.92rem">Com 3 ou mais registos em 10+ dias, a app diz-te se deves comer mais ou menos. Para «${G.n}» o ritmo certo é ${sg(G.lo)} a ${sg(G.hi)} kg por semana.</p>`;
+ if(r!==null){const rs=sg(Math.round(r*100)/100)+' kg/semana';
+  if(r<G.lo)rec=`<p><span class="pill warn">${rs}</span> ${G.lo<0?'A descer depressa demais: assim perdes músculo. Come mais 150 kcal por dia.':'Abaixo do alvo. Come mais 150 kcal por dia.'}</p><button class="btn sm" data-act="adj" data-v="150">Aplicar +150 kcal</button>`;
+  else if(r>G.hi)rec=`<p><span class="pill warn">${rs}</span> ${G.hi>0?'Rápido demais: vai ser sobretudo gordura. Tira 150 kcal por dia.':G.lo<-0.1?'Ainda não está a descer o suficiente. Tira 150 kcal por dia.':'O peso está a subir. Tira 150 kcal por dia.'}</p><button class="btn sm" data-act="adj" data-v="-150">Aplicar −150 kcal</button>`;
   else rec=`<p><span class="pill ok">${rs}</span> Ritmo certo. Mantém.</p>`}
  const wk=cycleWeek();
  return `<div class="stack"><div><p class="eyebrow">Perfil e progresso</p><h1>Eu</h1></div>
  <div class="card stack"><h3>Peso corporal</h3>
   <div class="row"><label class="fld"><input id="w-in" inputmode="decimal" autocomplete="off" placeholder="${fmt(S.weights.length?S.weights[S.weights.length-1].kg:p.w)}" aria-label="Peso de hoje"><span>kg</span></label><button class="btn sm" data-act="weigh">Registar hoje</button></div>
   ${chart()}${rec}</div>
- <div class="card stack"><h3>Os meus dados</h3><div class="form">
-  <label>Idade<input id="p-age" inputmode="numeric" value="${p.age}"></label>
-  <label>Altura (cm)<input id="p-h" inputmode="numeric" value="${p.h}"></label>
-  <label class="full">Atividade fora do ginásio<select id="p-act">
-   <option value="1.45" ${p.act==1.45?'selected':''}>Sentado a maior parte do dia</option>
-   <option value="1.55" ${p.act==1.55?'selected':''}>Misto: algum tempo de pé e a andar</option>
-   <option value="1.65" ${p.act==1.65?'selected':''}>Muito tempo de pé ou trabalho físico</option></select></label></div>
-  <div class="kv num"><span>Metabolismo basal</span><span>${t.bmr} kcal</span><span>Gasto diário estimado</span><span>${t.tdee} kcal</span><span>Alvo para ganhar massa</span><span>${t.kcal} kcal</span>${S.adj?`<span>Ajuste aplicado</span><span>${S.adj>0?'+':''}${S.adj} kcal</span>`:''}</div>
+ <div class="card stack"><h3>Os meus dados</h3>${profForm(p)}
+  <div class="kv num"><span>Metabolismo basal</span><span>${t.bmr} kcal</span><span>Gasto diário estimado</span><span>${t.tdee} kcal</span><span>Alvo: ${G.n.toLowerCase()}</span><span>${t.kcal} kcal</span>${S.adj?`<span>Ajuste aplicado</span><span>${S.adj>0?'+':''}${S.adj} kcal</span>`:''}</div>
   ${S.adj?'<button class="btn ghost sm" data-act="adj0">Repor ajuste a 0</button>':''}
-  <p class="muted" style="font-size:.9rem">O peso usado nas contas é o último que registaste.</p></div>
+  <p class="muted" style="font-size:.9rem">Mudar o peso aqui também o regista no gráfico de hoje.</p></div>
  ${vWatchEu()}
  <div class="card stack"><h3>Ciclo de treino</h3><p>Estás na <b>semana ${wk} de 5</b>. Começou a ${dshort(S.start)}.</p>
   <button class="btn ghost sm" data-act="cycle">Recomeçar ciclo hoje</button></div></div>`;
@@ -580,7 +650,7 @@ function vEu(){
 
 /* ---------- RENDER & EVENTOS ---------- */
 function render(){
- $('#app').innerHTML=ui.tab==='hoje'?vHoje():ui.tab==='historico'?vHist():ui.tab==='plano'?vPlano():ui.tab==='refeicoes'?vRef():vEu();
+ $('#app').innerHTML=!S.setup?vSetup():ui.tab==='hoje'?vHoje():ui.tab==='historico'?vHist():ui.tab==='plano'?vPlano():ui.tab==='refeicoes'?vRef():vEu();
  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===ui.tab));
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.id);toast.id=setTimeout(()=>t.hidden=true,2200)}
@@ -588,9 +658,16 @@ function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeou
 document.addEventListener('input',e=>{const el=e.target;
  if(el.dataset.ex){const d=draft(ui.code);if(!d.t0)d.t0=Date.now();const a=d.v[el.dataset.ex]=d.v[el.dataset.ex]||[];const k=+el.dataset.k;a[k]=a[k]||{};
   const v=el.dataset.f==='r'?parseInt(el.value,10):num(el.value);a[k][el.dataset.f]=isFinite(v)&&v!==null?v:null;save();return}
- if(el.id==='p-age'||el.id==='p-h'){const v=parseInt(el.value,10);if(v>0){S.profile[el.id==='p-age'?'age':'h']=v;save();refreshKV()}}
+ if(el.id==='p-age'||el.id==='p-h'||el.id==='p-w'){let v=num(el.value);if(v===null)return;
+  if(el.id==='p-h'&&v<3)v=Math.round(v*100);
+  if(el.id==='p-age'&&v>=12&&v<=100)S.profile.age=Math.round(v);
+  else if(el.id==='p-h'&&v>=120&&v<=230)S.profile.h=Math.round(v);
+  else if(el.id==='p-w'&&v>=30&&v<=250){S.profile.w=v;if(S.setup){S.weights=S.weights.filter(x=>x.d!==TODAY);S.weights.push({d:TODAY,kg:v});S.weights.sort((a,b)=>a.d<b.d?-1:1)}}
+  else return;save();if(S.setup)refreshKV()}
 });
-document.addEventListener('change',e=>{if(e.target.id==='p-act'){S.profile.act=parseFloat(e.target.value);save();render()}});
+document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
+ if(id==='p-act')S.profile.act=parseFloat(v);else if(id==='p-sex')S.profile.sex=v;else if(id==='p-goal')S.profile.goal=v;else return;
+ save();if(S.setup)render()});
 function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{const f=document.activeElement&&document.activeElement.id;render();if(f){const el=document.getElementById(f);if(el){el.focus();const l=el.value.length;try{el.setSelectionRange(l,l)}catch(e){}}}},700)}
 
 document.addEventListener('click',e=>{
@@ -619,6 +696,13 @@ document.addEventListener('click',e=>{
   S.history=S.history.filter(h=>!(h.d===TODAY&&h.code===code));S.history.push(rec);if(S.history.length>1000)S.history.shift();
   delete S.drafts[code];setToday(code);render();toast(prs.length?`Guardado · ${prs.length} recorde${prs.length>1?'s':''} novo${prs.length>1?'s':''}!`:`Treino ${code} guardado · próximo: ${nextCode()}`);window.scrollTo(0,0);if(NATIVE&&S.hc.on)setTimeout(()=>syncWatch(TODAY,false),1500);
  }
+ else if(a==='setup'){const p=S.profile,age=num($('#p-age').value),w=num($('#p-w').value);let h=num($('#p-h').value);if(h&&h<3)h=Math.round(h*100);
+  if(!age||age<12||age>100){toast('Escreve a tua idade');$('#p-age').focus();return}
+  if(!h||h<120||h>230){toast('Escreve a altura em cm, por exemplo 164');$('#p-h').focus();return}
+  if(!w||w<30||w>250){toast('Escreve o peso em kg, por exemplo 65');$('#p-w').focus();return}
+  if(!$('#p-goal').value){toast('Escolhe o teu objetivo');$('#p-goal').focus();return}
+  Object.assign(p,{age:Math.round(age),h:Math.round(h),w,sex:$('#p-sex').value,goal:$('#p-goal').value,act:parseFloat($('#p-act').value)});
+  S.weights=[{d:TODAY,kg:w}];S.start=TODAY;S.setup=true;save();ui.tab='hoje';render();window.scrollTo(0,0);toast('Tudo pronto. Bom treino!')}
  else if(a==='hdel'){const dd=b.dataset.d,cc=b.dataset.c;if(!confirm(`Apagar o treino ${cc} de ${dshort(dd)}?`))return;
   S.history=S.history.filter(h=>!(h.d===dd&&h.code===cc));S.sessions=S.sessions.filter(x=>!(x.d===dd&&x.code===cc));
   SESS[cc].ex.forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
@@ -645,6 +729,7 @@ function tick(){const left=Math.max(0,Math.ceil((T.end-Date.now())/1000));$('#t-
  $('#t-bar').style.transform=`scaleX(${T.total?left/T.total:0})`;
  if(left<=0&&T.id){clearInterval(T.id);T.id=null;$('#timer').classList.add('over');$('#t-label').textContent='Próxima série!';beep()}}
 
+document.title=APPNAME;$('#appname').textContent=APPNAME;
 render();
 function autoWatch(){if(NATIVE&&S.hc.on&&todayCode()&&!S.watch[TODAY])syncWatch(TODAY,true)}
 autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
