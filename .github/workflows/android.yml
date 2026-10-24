@@ -66,7 +66,8 @@ jobs:
           set -e
           tail -n 60 "$RUNNER_TEMP/gradle.log"
           if [ $RC -ne 0 ]; then
-            { grep -E "^e: |error:" "$RUNNER_TEMP/gradle.log" | head -n 15; grep -A8 -E "What went wrong|^\* Where" "$RUNNER_TEMP/gradle.log" | head -n 30; } | grep -v "^\s*$" | while IFS= read -r l; do echo "::error::$l"; done
+            MSG=$( { grep -A6 -E "^\* Where|What went wrong" "$RUNNER_TEMP/gradle.log" | head -n 16; grep -E "^e: |error:" "$RUNNER_TEMP/gradle.log" | head -n 8; } | grep -v "^\s*$" | sed ':a;N;$!ba;s/\n/ | /g' )
+            echo "::error::$MSG"
             exit $RC
           fi
           if [ "$SIGNED" = "release" ]; then
