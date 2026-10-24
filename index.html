@@ -156,8 +156,24 @@ details ul{margin:8px 0 0;padding-left:20px;display:flex;flex-direction:column;g
 /* barra de separadores */
 nav.tabs{position:fixed;left:0;right:0;bottom:0;z-index:20;background:var(--surface);border-top:1px solid var(--line);
   padding-bottom:var(--sab);padding-left:max(8px,var(--sal));padding-right:max(8px,var(--sar))}
-nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(4,1fr)}
-nav.tabs button{background:none;border:0;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.78rem;font-weight:600;color:var(--muted)}
+nav.tabs .in{max-width:560px;margin:0 auto;display:grid;grid-template-columns:repeat(5,1fr)}
+nav.tabs button{background:none;border:0;padding:8px 0 10px;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:.74rem;font-weight:600;color:var(--muted);min-width:0}
+
+/* histórico */
+.hsum{display:grid;grid-template-columns:repeat(2,1fr);gap:8px}
+.hsum div{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;min-width:0}
+.hsum b{font-family:var(--display);font-size:1.7rem;font-weight:800;display:block;line-height:1.1}
+.hsum small{color:var(--muted);font-size:.8rem;display:block}
+.hhead{display:flex;align-items:center;gap:4px 10px;flex-wrap:wrap}
+.hhead .dot{flex:none;width:14px;height:14px}
+.hhead h3{flex:1;min-width:0}
+.hhead time{font-size:.85rem;color:var(--muted);flex-basis:100%;padding-left:24px}
+.prs{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.exrow{display:flex;justify-content:space-between;gap:10px;padding:7px 0;border-top:1px solid var(--line);font-size:.92rem}
+.exrow:first-child{border-top:0}
+.exrow span:last-child{text-align:right;font-weight:600}
+.est{font-size:.7rem;color:var(--muted)}
+.del{background:none;border:0;color:var(--red);font-weight:600;font-size:.9rem;padding:8px 0 0}
 nav.tabs button svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
 nav.tabs button[aria-selected="true"]{color:var(--ink)}
 nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
@@ -189,6 +205,7 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 
 <nav class="tabs" aria-label="Secções"><div class="in">
   <button data-tab="hoje"><svg viewBox="0 0 24 24"><path d="M2 10v4M5.5 7v10M18.5 7v10M22 10v4M5.5 12h13"/></svg>Hoje</button>
+  <button data-tab="historico"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>Histórico</button>
   <button data-tab="plano"><svg viewBox="0 0 24 24"><path d="M8 6h13M8 12h13M8 18h13M3.5 6h.01M3.5 12h.01M3.5 18h.01"/></svg>Plano</button>
   <button data-tab="refeicoes"><svg viewBox="0 0 24 24"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11M17 3c-2 0-3 2.5-3 5.5S15 13 17 13v8"/></svg>Refeições</button>
   <button data-tab="eu"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Eu</button>
@@ -293,11 +310,32 @@ const fmt=n=>String(Math.round(n*100)/100).replace('.',',');
 const num=v=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
 const dshort=s=>s.slice(8,10)+'/'+s.slice(5,7);
 const KEY='massa47_v1';
-function defState(){return{profile:{age:47,h:184,w:86,act:1.55},adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:86}],drafts:{},sessions:[],hc:{on:false},watch:{}}}
+function defState(){return{profile:{age:47,h:184,w:86,act:1.55},adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:86}],drafts:{},sessions:[],hc:{on:false},watch:{},history:[],histV:0}}
 function load(){try{const r=localStorage.getItem(KEY);if(r)return Object.assign(defState(),JSON.parse(r))}catch(e){}return defState()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 let S=load();
-const TABS=['hoje','plano','refeicoes','eu'];
+
+/* ---------- HISTÓRICO: registo de cada treino guardado ---------- */
+const EXN={};Object.values(SESS).forEach(s=>s.ex.forEach(e=>EXN[e.id]=e.n));
+const MET=5; /* musculação: ~5 MET, usado só quando não há dados do relógio */
+function mkHist(d,code,exs,t0,t1){let sets=0,reps=0,vol=0;exs.forEach(e=>e.sets.forEach(s=>{sets++;reps+=s.r;vol+=(s.kg||0)*s.r}));
+ let dur=t0&&t1?Math.round((t1-t0)/60000):null;if(dur!==null&&(dur<5||dur>180))dur=null;
+ return{d,code,t0:t0||null,t1:t1||null,dur,sets,reps,vol:Math.round(vol),ex:exs,prs:[]}}
+/* treinos guardados antes desta versão: reconstrói-os a partir dos registos de séries */
+if(S.histV!==1){
+ S.sessions.forEach(x=>{if(!SESS[x.code]||S.history.some(h=>h.d===x.d&&h.code===x.code))return;
+  const exs=SESS[x.code].ex.map(e=>{const l=(S.logs[e.id]||[]).find(y=>y.d===x.d);return l?{id:e.id,sets:l.sets}:null}).filter(Boolean);
+  if(exs.length)S.history.push(mkHist(x.d,x.code,exs))});
+ S.history.sort((a,b)=>a.d<b.d?-1:1);S.histV=1;save();
+}
+function bodyKg(d){const w=S.weights.filter(x=>x.d<=d).sort((a,b)=>a.d<b.d?-1:1);return w.length?w[w.length-1].kg:S.profile.w}
+function hStats(h){const w=S.watch[h.d];
+ const wDur=w&&w.dur>0,dur=wDur?w.dur:(h.dur||Math.max(20,Math.round(h.sets*2.5))),durEst=!wDur&&!h.dur;
+ const wK=w&&w.kcal!=null,kcal=wK?w.kcal:Math.round(MET*bodyKg(h.d)*dur/60);
+ return{dur,durEst,kcal,kEst:!wK,hrAvg:w?w.hrAvg:null,hrMax:w?w.hrMax:null,watch:!!w}}
+const fmtMin=m=>m>=60?`${Math.floor(m/60)} h ${pad(m%60)}`:`${m} min`;
+const hhmm=t=>{const x=new Date(t);return `${pad(x.getHours())}:${pad(x.getMinutes())}`};
+const TABS=['hoje','historico','plano','refeicoes','eu'];
 const ORDER=['A','B','C','D'];
 const after=c=>ORDER[(ORDER.indexOf(c)+1)%4];
 function todayCode(){const t=S.sessions.find(x=>x.d===TODAY);return t?t.code:null}
@@ -390,8 +428,40 @@ function vHoje(){
  });
  if(NATIVE&&S.hc.on)h+=`<div class="card"><div class="ex-head"><h3>Relógio · hoje</h3><button class="btn ghost sm" data-act="watch">Atualizar</button></div>${watchCard(TODAY)}</div>`;
  h+=`<button class="btn" data-act="save" data-code="${code}">Guardar treino</button>
+ ${d.t0?`<p class="muted num" style="font-size:.9rem">Começaste às ${hhmm(d.t0)}. O tempo e as calorias ficam no Histórico quando guardares.</p>`:''}
  <p class="muted" style="font-size:.9rem">Toca em ✓ no fim de cada série para arrancar o descanso. O que guardares aparece na próxima sessão e a app diz-te quando subir o peso.</p></div>`;
  return h;
+}
+
+/* ---------- HISTÓRICO ---------- */
+function setsTxt(sets){const kgs=[...new Set(sets.map(s=>s.kg||0))];
+ if(kgs.length===1)return `${kgs[0]?fmt(kgs[0])+' kg × ':''}${sets.map(s=>s.r).join(', ')}${kgs[0]?'':' reps'}`;
+ return sets.map(s=>`${fmt(s.kg||0)}×${s.r}`).join(' · ')}
+function records(){const R={};
+ S.history.forEach(h=>h.ex.forEach(e=>e.sets.forEach(s=>{if(!(s.kg>0))return;const r=R[e.id];
+  if(!r||s.kg>r.kg||(s.kg===r.kg&&s.r>r.r))R[e.id]={kg:s.kg,r:s.r,d:h.d}})));
+ return Object.keys(EXN).filter(id=>R[id]).map(id=>({id,...R[id]}))}
+function vHist(){
+ const H=[...S.history].sort((a,b)=>a.d===b.d?(b.t1||0)-(a.t1||0):(a.d<b.d?1:-1));
+ let h=`<div class="stack"><div><p class="eyebrow">Tudo o que já fizeste</p><h1>Histórico</h1></div>`;
+ if(!H.length)return h+`<div class="card"><p class="muted">Ainda não há treinos guardados. No fim de cada treino toca em <b>Guardar treino</b>: aparece aqui com a hora, o tempo, as calorias, as séries e os recordes.</p></div></div>`;
+ const tot=a=>a.reduce((t,x)=>{const s=hStats(x);t.n++;t.min+=s.dur;t.k+=s.kcal;t.v+=x.vol;return t},{n:0,min:0,k:0,v:0});
+ const mk=TODAY.slice(0,7),M=tot(H.filter(x=>x.d.slice(0,7)===mk)),A=tot(H);
+ const box=(t,lbl)=>`<div class="card stack"><h3>${lbl}</h3><div class="hsum num">
+  <div><b>${t.n}</b><small>treinos</small></div><div><b>${fmtMin(t.min)}</b><small>tempo a treinar</small></div>
+  <div><b>${t.k.toLocaleString('pt-PT')}</b><small>kcal gastas</small></div><div><b>${fmt(Math.round(t.v/100)/10)} t</b><small>peso levantado</small></div></div></div>`;
+ h+=box(M,'Este mês')+(A.n>M.n?box(A,'Desde o início'):'');
+ const R=records();
+ if(R.length)h+=`<div class="card"><h3>Recordes pessoais</h3><div style="margin-top:6px">${R.map(r=>`<div class="exrow num"><span>${EXN[r.id]}</span><span>${fmt(r.kg)} kg × ${r.r} <span class="est">${dshort(r.d)}</span></span></div>`).join('')}</div></div>`;
+ h+=`<p class="eyebrow">Treinos guardados</p>`;
+ H.forEach(x=>{const s=SESS[x.code],st=hStats(x),wd=DAYS_FULL[new Date(x.d+'T12:00:00').getDay()];
+  h+=`<article class="card"><div class="hhead"><span class="dot p-${s?s.cls:'none'}"></span><h3>${x.code} · ${s?s.name:''}</h3><time>${wd}, ${dshort(x.d)}${x.t0?' · '+hhmm(x.t0):''}</time></div>
+  <div class="watch num"><div><b>${st.dur}</b><small>min${st.durEst?' ≈':''}</small></div><div><b>${st.kcal}</b><small>kcal${st.kEst?' ≈':''}</small></div><div><b>${x.sets}</b><small>séries</small></div><div><b>${fmt(Math.round(x.vol/100)/10)}</b><small>t total</small></div></div>
+  ${st.hrAvg?`<p class="muted num" style="font-size:.9rem;margin-top:6px">Frequência cardíaca: média ${st.hrAvg}${st.hrMax?' · máxima '+st.hrMax:''} bpm</p>`:''}
+  ${x.prs&&x.prs.length?`<div class="prs">${x.prs.map(p=>`<span class="pill ok">Recorde · ${EXN[p.id]}: ${fmt(p.kg)} kg</span>`).join('')}</div>`:''}
+  <details style="margin-top:10px"><summary>Exercícios (${x.ex.length})</summary><div style="margin-top:6px">${x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
+  <button class="del" data-act="hdel" data-d="${x.d}" data-c="${x.code}">Apagar este treino</button></details></article>`});
+ return h+`<p class="muted" style="font-size:.85rem">≈ estimativa: sem dados do relógio, o tempo vem da hora da 1.ª série até guardares e as calorias são calculadas pelo teu peso e pelo tempo.</p></div>`;
 }
 
 /* ---------- PLANO ---------- */
@@ -510,13 +580,13 @@ function vEu(){
 
 /* ---------- RENDER & EVENTOS ---------- */
 function render(){
- $('#app').innerHTML=ui.tab==='hoje'?vHoje():ui.tab==='plano'?vPlano():ui.tab==='refeicoes'?vRef():vEu();
+ $('#app').innerHTML=ui.tab==='hoje'?vHoje():ui.tab==='historico'?vHist():ui.tab==='plano'?vPlano():ui.tab==='refeicoes'?vRef():vEu();
  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===ui.tab));
 }
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.id);toast.id=setTimeout(()=>t.hidden=true,2200)}
 
 document.addEventListener('input',e=>{const el=e.target;
- if(el.dataset.ex){const d=draft(ui.code);const a=d.v[el.dataset.ex]=d.v[el.dataset.ex]||[];const k=+el.dataset.k;a[k]=a[k]||{};
+ if(el.dataset.ex){const d=draft(ui.code);if(!d.t0)d.t0=Date.now();const a=d.v[el.dataset.ex]=d.v[el.dataset.ex]||[];const k=+el.dataset.k;a[k]=a[k]||{};
   const v=el.dataset.f==='r'?parseInt(el.value,10):num(el.value);a[k][el.dataset.f]=isFinite(v)&&v!==null?v:null;save();return}
  if(el.id==='p-age'||el.id==='p-h'){const v=parseInt(el.value,10);if(v>0){S.profile[el.id==='p-age'?'age':'h']=v;save();refreshKV()}}
 });
@@ -528,7 +598,7 @@ document.addEventListener('click',e=>{
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
  if(a==='code'){ui.code=b.dataset.c;setToday(ui.code);render();toast(`Hoje: treino ${ui.code} · próximo: ${nextCode()}`)}
  else if(a==='done'){
-  const code=ui.code;if(todayCode()!==code)setToday(code);const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
+  const code=ui.code;if(todayCode()!==code)setToday(code);const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
   if(v.done){v.done=false;save();render();return}
   const kgIn=document.getElementById(`kg-${id}-${k}`),rIn=document.getElementById(`r-${id}-${k}`);
   if(v.kg==null&&kgIn.placeholder!=='—')v.kg=num(kgIn.placeholder);
@@ -536,12 +606,22 @@ document.addEventListener('click',e=>{
   v.done=true;save();render();startTimer(+b.dataset.rest);
  }
  else if(a==='save'){
-  const code=b.dataset.code,d=draft(code);let n=0;
+  const code=b.dataset.code,d=draft(code);let n=0;const exs=[],prs=[];
   SESS[code].ex.forEach(ex=>{const sets=(d.v[ex.id]||[]).filter(s=>s&&s.r>0).map(s=>({kg:s.kg||0,r:s.r}));
-   if(sets.length){const l=S.logs[ex.id]=S.logs[ex.id]||[];if(l.length&&l[l.length-1].d===TODAY)l.pop();l.push({d:TODAY,sets});if(l.length>30)l.shift();n++}});
+   if(sets.length){
+    let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
+    const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
+    exs.push({id:ex.id,sets});
+    const l=S.logs[ex.id]=S.logs[ex.id]||[];if(l.length&&l[l.length-1].d===TODAY)l.pop();l.push({d:TODAY,sets});if(l.length>30)l.shift();n++}});
   if(!n){toast('Ainda não registaste nenhuma série');return}
-  delete S.drafts[code];setToday(code);render();toast(`Treino ${code} guardado · próximo: ${nextCode()}`);window.scrollTo(0,0);if(NATIVE&&S.hc.on)setTimeout(()=>syncWatch(TODAY,false),1500);
+  const old=S.history.find(h=>h.d===TODAY&&h.code===code);
+  const rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;
+  S.history=S.history.filter(h=>!(h.d===TODAY&&h.code===code));S.history.push(rec);if(S.history.length>1000)S.history.shift();
+  delete S.drafts[code];setToday(code);render();toast(prs.length?`Guardado · ${prs.length} recorde${prs.length>1?'s':''} novo${prs.length>1?'s':''}!`:`Treino ${code} guardado · próximo: ${nextCode()}`);window.scrollTo(0,0);if(NATIVE&&S.hc.on)setTimeout(()=>syncWatch(TODAY,false),1500);
  }
+ else if(a==='hdel'){const dd=b.dataset.d,cc=b.dataset.c;if(!confirm(`Apagar o treino ${cc} de ${dshort(dd)}?`))return;
+  S.history=S.history.filter(h=>!(h.d===dd&&h.code===cc));S.sessions=S.sessions.filter(x=>!(x.d===dd&&x.code===cc));
+  SESS[cc].ex.forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
  else if(a==='weigh'){const v=num($('#w-in').value);if(!v||v<30||v>250){toast('Escreve o peso em kg, por exemplo 86,4');return}
   S.weights=S.weights.filter(x=>x.d!==TODAY);S.weights.push({d:TODAY,kg:v});S.weights.sort((x,y)=>x.d<y.d?-1:1);S.profile.w=v;save();render();toast('Peso registado')}
  else if(a==='adj'){S.adj+=+b.dataset.v;save();render();toast(`Novo alvo: ${targets().kcal} kcal`)}
