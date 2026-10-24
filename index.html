@@ -249,6 +249,13 @@ const SESS={
     care:'Lombar neutra o tempo todo.'},
    {id:'remada_maq',img:1,n:'Remada na máquina convergente (tipo Hammer)',
     cues:['Peito encostado ao apoio.','Puxa os cotovelos para trás e aperta as omoplatas 1 s.','Volta até esticar bem os braços.']}]},
+  {sets:3,reps:[8,12],rest:90,inc:2.5,v:[
+   {id:'puxada',img:1,n:'Puxada frontal, pega média',
+    cues:['Peito alto, tronco ligeiramente inclinado para trás.','Leva os cotovelos para baixo e para trás até a barra chegar ao queixo.','Sobe devagar até esticar bem os braços.']},
+   {id:'puxada_uni',img:1,n:'Puxada unilateral no cabo',
+    cues:['Um braço de cada vez, pega à frente da cara.','Leva o cotovelo para baixo, até junto da anca.','Sobe devagar até sentires o dorsal esticar.']},
+   {id:'puxada_maq',img:1,n:'Puxada na máquina convergente',
+    cues:['Coxas presas debaixo dos rolos.','Puxa os cotovelos para baixo e para trás.','Controla a subida até esticar bem.']}]},
   {sets:3,reps:[8,10],rest:120,inc:2,v:[
    {id:'desenv',img:1,n:'Desenvolvimento com halteres sentado',
     cues:['Encosto quase vertical, lombar encostada.','Começa com os halteres à altura das orelhas.','Empurra para cima e ligeiramente para dentro, sem bater os halteres.'],
@@ -258,13 +265,6 @@ const SESS={
    {id:'landmine',img:1,n:'Landmine press (barra presa num canto), um braço',inc:2.5,
     cues:['Segura a ponta da barra à frente do ombro, de pé ou de joelhos.','Empurra para cima e para a frente, em diagonal.','Um braço de cada vez: as reps são por braço.'],
     care:'É a variante mais amiga dos ombros.'}]},
-  {sets:3,reps:[8,12],rest:90,inc:2.5,v:[
-   {id:'puxada',img:1,n:'Puxada frontal, pega média',
-    cues:['Peito alto, tronco ligeiramente inclinado para trás.','Leva os cotovelos para baixo e para trás até a barra chegar ao queixo.','Sobe devagar até esticar bem os braços.']},
-   {id:'puxada_uni',img:1,n:'Puxada unilateral no cabo',
-    cues:['Um braço de cada vez, pega à frente da cara.','Leva o cotovelo para baixo, até junto da anca.','Sobe devagar até sentires o dorsal esticar.']},
-   {id:'puxada_maq',img:1,n:'Puxada na máquina convergente',
-    cues:['Coxas presas debaixo dos rolos.','Puxa os cotovelos para baixo e para trás.','Controla a subida até esticar bem.']}]},
   {sets:3,reps:[12,15],rest:60,inc:1,iso:1,v:[
    {id:'elev_lat',img:1,n:'Elevações laterais com halteres',
     cues:['Cotovelos ligeiramente dobrados.','Sobe até à altura dos ombros, nunca acima.','Peso leve, zero balanço do tronco.']},
@@ -714,7 +714,7 @@ function vPlano(){
   h+=`</div></div>`;
  });
  h+=`<div class="card stack"><h2>Regras do jogo</h2><ul class="list">
-  <li><b>Ordem de cada treino:</b> 1) aquecimento e ativação leve, 2) compostos pesados (vários músculos e articulações), 3) isolamento, 4) core no fim.</li>
+  <li><b>Ordem de cada treino:</b> 1) ativação leve, 2) compostos pesados, começando pelos músculos grandes (peito, costas, coxas) e só depois os pequenos (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.</li>
   <li><b>Esforço sobe ao longo do ciclo:</b> semana 1 com 3 repetições em reserva (RIR), semana 2 com 2, semana 3 com 1–2, semana 4 com 1 (isolamento até 0–1). Técnica limpa vale mais que peso.</li>
   <li><b>Volume:</b> nas semanas 3 e 4 os exercícios de isolamento ganham +1 série.</li>
   <li><b>Variantes:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). Sempre que repetes o treino, muda para a seguinte. A app compara sempre com a última vez que fizeste a mesma variante.</li>
