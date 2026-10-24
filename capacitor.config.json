@@ -1,0 +1,18 @@
+{
+  "appId": "pt.catpower.app",
+  "appName": "Cat Power",
+  "webDir": "www",
+  "android": {
+    "backgroundColor": "#F5F7F8"
+  },
+  "plugins": {
+    "SystemBars": {
+      "style": "LIGHT",
+      "initialViewportFitValueHint": "cover"
+    },
+    "SplashScreen": {
+      "launchShowDuration": 600,
+      "backgroundColor": "#F5F7F8"
+    }
+  }
+}
