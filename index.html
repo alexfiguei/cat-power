@@ -223,80 +223,238 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 
 <script>
 /* ---------- DADOS DO PLANO ---------- */
+/* Cada exercício é um "posto" com 3 variantes do mesmo movimento (máquina, halteres, cabo...).
+   A variante muda sempre que o treino se repete; a progressão é comparada com a última vez da mesma variante.
+   iso = exercício de isolamento (ganha +1 série nas semanas 3 e 4). img = há fotos da variante. */
 const SESS={
  A:{name:'Superior · Força',plate:20,cls:'blue',dur:'60–70 min',ex:[
-  {id:'sup_incl',n:'Supino inclinado com halteres',sets:4,reps:[6,10],rest:150,inc:2,
-   cues:['Banco a 30°. Junta as omoplatas e empurra-as para baixo antes de começar.','Desce até os halteres ficarem ao lado do peito, cotovelos a ~45° do tronco.','Desce em 2–3 s, sobe com força.'],
-   care:'Se o ombro incomodar, usa pega neutra (palmas viradas uma para a outra).'},
-  {id:'remada_peito',n:'Remada com apoio no peito',sets:4,reps:[8,10],rest:120,inc:2.5,
-   cues:['Peito sempre encostado ao apoio (máquina ou banco inclinado).','Puxa os cotovelos para trás, junto ao corpo.','Aperta as omoplatas 1 s no fim e volta controlado.'],
-   care:'O apoio no peito tira a carga da lombar. Preferível à remada curvada com barra.'},
-  {id:'desenv',n:'Desenvolvimento com halteres sentado',sets:3,reps:[8,10],rest:120,inc:2,
-   cues:['Encosto quase vertical, lombar encostada.','Começa com os halteres à altura das orelhas.','Empurra para cima e ligeiramente para dentro, sem bater os halteres.'],
-   care:'Trabalha só na amplitude sem dor. Picada no ombro = para.'},
-  {id:'puxada',n:'Puxada frontal, pega média',sets:3,reps:[8,12],rest:90,inc:2.5,
-   cues:['Peito alto, tronco ligeiramente inclinado para trás.','Leva os cotovelos para baixo e para trás até a barra chegar ao queixo.','Sobe devagar até esticar bem os braços.']},
-  {id:'elev_lat',n:'Elevações laterais com halteres',sets:3,reps:[12,15],rest:60,inc:1,
-   cues:['Cotovelos ligeiramente dobrados.','Sobe até à altura dos ombros, nunca acima.','Peso leve, zero balanço do tronco.']},
-  {id:'curl_incl',n:'Curl inclinado com halteres',sets:2,reps:[10,12],rest:60,inc:1,
-   cues:['Banco a 45–60°, braços pendurados atrás do tronco.','Não avances os cotovelos ao subir.','Desce até esticar totalmente.']},
-  {id:'tric_corda',n:'Tríceps na polia com corda',sets:2,reps:[10,12],rest:60,inc:2.5,
-   cues:['Cotovelos colados ao corpo, só o antebraço mexe.','No fim, abre a corda para fora.','Volta até 90° sem deixar a carga bater.']}
+  {sets:4,reps:[6,10],rest:150,inc:2,v:[
+   {id:'sup_incl',img:1,n:'Supino inclinado com halteres',
+    cues:['Banco a 30°. Junta as omoplatas e empurra-as para baixo antes de começar.','Desce até os halteres ficarem ao lado do peito, cotovelos a ~45° do tronco.','Desce em 2–3 s, sobe com força.'],
+    care:'Se o ombro incomodar, usa pega neutra (palmas viradas uma para a outra).'},
+   {id:'sup_incl_maq',n:'Supino inclinado na máquina (ou no Smith)',inc:2.5,
+    cues:['Ajusta o banco para as pegas ficarem na parte de cima do peito.','Omoplatas juntas e coladas ao encosto.','Desce controlado até o peito esticar e empurra sem bloquear os cotovelos.']},
+   {id:'sup_plano_h',n:'Supino plano com halteres',
+    cues:['Pés firmes no chão, omoplatas juntas e para baixo.','Desce até os halteres ficarem ao lado do peito, cotovelos a ~45°.','Desce em 2–3 s, sobe com força.'],
+    care:'Se o ombro incomodar, usa pega neutra.'}]},
+  {sets:4,reps:[8,10],rest:120,inc:2.5,v:[
+   {id:'remada_peito',img:1,n:'Remada com apoio no peito',
+    cues:['Peito sempre encostado ao apoio (máquina ou banco inclinado).','Puxa os cotovelos para trás, junto ao corpo.','Aperta as omoplatas 1 s no fim e volta controlado.'],
+    care:'O apoio no peito tira a carga da lombar. Preferível à remada curvada com barra.'},
+   {id:'remada_cabo',n:'Remada sentada no cabo, pega estreita',
+    cues:['Tronco direito, com ligeira inclinação à frente no início.','Puxa a pega até ao umbigo, cotovelos junto ao corpo.','Sem balançar o tronco para trás.'],
+    care:'Lombar neutra o tempo todo.'},
+   {id:'remada_maq',n:'Remada na máquina convergente (tipo Hammer)',
+    cues:['Peito encostado ao apoio.','Puxa os cotovelos para trás e aperta as omoplatas 1 s.','Volta até esticar bem os braços.']}]},
+  {sets:3,reps:[8,10],rest:120,inc:2,v:[
+   {id:'desenv',img:1,n:'Desenvolvimento com halteres sentado',
+    cues:['Encosto quase vertical, lombar encostada.','Começa com os halteres à altura das orelhas.','Empurra para cima e ligeiramente para dentro, sem bater os halteres.'],
+    care:'Trabalha só na amplitude sem dor. Picada no ombro = para.'},
+   {id:'desenv_maq',n:'Desenvolvimento na máquina',inc:2.5,
+    cues:['Pegas à altura dos ombros no início.','Costas encostadas, abdómen firme.','Empurra para cima sem bloquear os cotovelos.']},
+   {id:'landmine',n:'Landmine press (barra presa num canto), um braço',inc:2.5,
+    cues:['Segura a ponta da barra à frente do ombro, de pé ou de joelhos.','Empurra para cima e para a frente, em diagonal.','Um braço de cada vez: as reps são por braço.'],
+    care:'É a variante mais amiga dos ombros.'}]},
+  {sets:3,reps:[8,12],rest:90,inc:2.5,v:[
+   {id:'puxada',img:1,n:'Puxada frontal, pega média',
+    cues:['Peito alto, tronco ligeiramente inclinado para trás.','Leva os cotovelos para baixo e para trás até a barra chegar ao queixo.','Sobe devagar até esticar bem os braços.']},
+   {id:'puxada_uni',n:'Puxada unilateral no cabo',
+    cues:['Um braço de cada vez, pega à frente da cara.','Leva o cotovelo para baixo, até junto da anca.','Sobe devagar até sentires o dorsal esticar.']},
+   {id:'puxada_maq',n:'Puxada na máquina convergente',
+    cues:['Coxas presas debaixo dos rolos.','Puxa os cotovelos para baixo e para trás.','Controla a subida até esticar bem.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:1,iso:1,v:[
+   {id:'elev_lat',img:1,n:'Elevações laterais com halteres',
+    cues:['Cotovelos ligeiramente dobrados.','Sobe até à altura dos ombros, nunca acima.','Peso leve, zero balanço do tronco.']},
+   {id:'elev_lat_maq',n:'Elevação lateral na máquina',inc:2.5,
+    cues:['Ombro alinhado com o eixo da máquina.','Sobe até à altura dos ombros e pausa 1 s.','Desce em 2–3 s.']},
+   {id:'elev_lat_incl',n:'Elevação lateral deitado de lado num banco inclinado',
+    cues:['Deita-te de lado num banco a ~30°, halter na mão de cima.','Sobe o braço até ficar na vertical, cotovelo ligeiramente dobrado.','Peso leve, um lado de cada vez.']}]},
+  {sets:2,reps:[10,12],rest:60,inc:1,iso:1,v:[
+   {id:'curl_incl',img:1,n:'Curl inclinado com halteres',
+    cues:['Banco a 45–60°, braços pendurados atrás do tronco.','Não avances os cotovelos ao subir.','Desce até esticar totalmente.']},
+   {id:'curl_bayes',n:'Curl bayesiano no cabo (de costas para a polia)',inc:2.5,
+    cues:['Polia baixa, de costas para ela, com o braço puxado para trás do tronco.','Dobra o cotovelo sem o levar para a frente.','Um braço de cada vez, desce até esticar.']},
+   {id:'curl_scott',n:'Curl no banco Scott (máquina ou barra EZ)',inc:2.5,
+    cues:['Axila encostada ao topo do apoio.','Sobe sem tirar os cotovelos do apoio.','Desce devagar, quase até esticar.'],
+    care:'Não deixes cair o peso no fundo: é aí que o cotovelo sofre.'}]},
+  {sets:2,reps:[10,12],rest:60,inc:2.5,iso:1,v:[
+   {id:'tric_corda',img:1,n:'Tríceps na polia com corda',
+    cues:['Cotovelos colados ao corpo, só o antebraço mexe.','No fim, abre a corda para fora.','Volta até 90° sem deixar a carga bater.']},
+   {id:'tric_v',n:'Tríceps na polia com barra em V',
+    cues:['Cotovelos colados ao corpo.','Empurra até esticar e aperta 1 s.','Volta até 90° de cotovelo.']},
+   {id:'tric_uni',n:'Tríceps na polia, um braço, pega invertida',
+    cues:['Um braço de cada vez, palma virada para cima.','Cotovelo fixo ao lado do corpo.','Estica totalmente e volta devagar.']}]}
  ]},
  B:{name:'Inferior · Força',plate:25,cls:'red',dur:'60 min',ex:[
-  {id:'leg_press',n:'Leg press',sets:4,reps:[8,12],rest:150,inc:5,
-   cues:['Pés à largura dos ombros, a meio da plataforma.','Desce até ~90° de joelho, ou antes de a bacia começar a enrolar.','Joelhos na direção dos pés. Não tranques os joelhos em cima.'],
-   care:'A lombar fica sempre encostada ao banco. Se descolar, desceste demais.'},
-  {id:'rdl',n:'Peso morto romeno com halteres',sets:3,reps:[8,10],rest:120,inc:2,
-   cues:['Joelhos ligeiramente dobrados e fixos.','Leva a anca para trás, como se fechasses uma porta com o rabo.','Halteres colados às pernas; desce até sentires os posteriores esticar (meio da canela).'],
-   care:'É o exercício mais exigente para a lombar: costas neutras, começa leve e deixa 2–3 reps de reserva.'},
-  {id:'bulgaro',n:'Agachamento búlgaro (por perna)',sets:3,reps:[8,10],rest:90,inc:2,
-   cues:['Pé de trás em cima de um banco.','Tronco ligeiramente inclinado à frente, desce a direito.','Empurra o chão com o calcanhar da perna da frente.'],
-   care:'Nas primeiras semanas segura num apoio com uma mão para te equilibrares.'},
-  {id:'leg_curl_s',n:'Leg curl sentado',sets:3,reps:[10,12],rest:75,inc:2.5,
-   cues:['Joelho alinhado com o eixo da máquina.','Dobra até ao fim e aperta 1 s.','Volta em 3 s.']},
-  {id:'gemeos_pe',n:'Gémeos em pé',sets:4,reps:[10,15],rest:60,inc:5,
-   cues:['Pausa 1–2 s em baixo, em alongamento.','Sobe até à ponta dos pés.','Sem saltitar.']},
-  {id:'pallof',n:'Pallof press (por lado)',sets:3,reps:[10,12],rest:60,inc:1,
-   cues:['De lado para a polia, cabo à altura do peito.','Estica os braços à frente e não deixes o tronco rodar.','Abdómen firme e respira normalmente.']}
+  {sets:4,reps:[8,12],rest:150,inc:5,v:[
+   {id:'leg_press',img:1,n:'Leg press',
+    cues:['Pés à largura dos ombros, a meio da plataforma.','Desce até ~90° de joelho, ou antes de a bacia começar a enrolar.','Joelhos na direção dos pés. Não tranques os joelhos em cima.'],
+    care:'A lombar fica sempre encostada ao banco. Se descolar, desceste demais.'},
+   {id:'smith_squat',n:'Agachamento no Smith, pés ligeiramente à frente',
+    cues:['Barra nos trapézios, pés um pouco à frente da barra.','Desce a direito até ~90° de joelho, ou mais se as costas ficarem neutras.','Empurra o chão com o pé inteiro.'],
+    care:'Os pés à frente tiram carga da lombar. Começa leve.'},
+   {id:'leg_press_uni',n:'Leg press com uma perna',inc:2.5,
+    cues:['Um pé a meio da plataforma, o outro fora.','Desce até ~90° de joelho sem a anca descolar.','Mesmas reps em cada perna; começa pela mais fraca.'],
+    care:'Usa cerca de 40–50% do peso que fazes com as duas pernas.'}]},
+  {sets:3,reps:[8,10],rest:120,inc:2,v:[
+   {id:'rdl',img:1,n:'Peso morto romeno com halteres',
+    cues:['Joelhos ligeiramente dobrados e fixos.','Leva a anca para trás, como se fechasses uma porta com o rabo.','Halteres colados às pernas; desce até sentires os posteriores esticar (meio da canela).'],
+    care:'É o exercício mais exigente para a lombar: costas neutras, começa leve e deixa 2–3 reps de reserva.'},
+   {id:'rdl_barra',n:'Peso morto romeno com barra',inc:5,
+    cues:['Barra colada às pernas o tempo todo.','Anca para trás, joelhos ligeiramente dobrados e fixos.','Desce até meio da canela, ou até as costas começarem a arredondar.'],
+    care:'Costas neutras sempre. Deixa 2–3 reps de reserva.'},
+   {id:'hiperext',n:'Hiperextensão a 45° (posteriores e glúteos)',inc:2.5,
+    cues:['Bordo do apoio logo abaixo da anca.','Dobra pela anca com as costas direitas, não pela lombar.','Sobe até ficares em linha reta; segura um disco ao peito para progredir.']}]},
+  {sets:3,reps:[8,10],rest:90,inc:2,v:[
+   {id:'bulgaro',img:1,n:'Agachamento búlgaro (por perna)',
+    cues:['Pé de trás em cima de um banco.','Tronco ligeiramente inclinado à frente, desce a direito.','Empurra o chão com o calcanhar da perna da frente.'],
+    care:'Nas primeiras semanas segura num apoio com uma mão para te equilibrares.'},
+   {id:'afundo_tras',n:'Afundo à retaguarda com halteres (por perna)',
+    cues:['Dá um passo atrás e desce o joelho de trás quase ao chão.','Tronco ligeiramente inclinado à frente.','Empurra com o calcanhar da perna da frente para voltar.']},
+   {id:'step_up',n:'Subida ao banco com halteres (por perna)',
+    cues:['Banco à altura do joelho.','Sobe empurrando só com a perna de cima, sem impulso da de baixo.','Desce devagar, em 2–3 s.'],
+    care:'Banco estável e encostado a uma parede.'}]},
+  {sets:3,reps:[10,12],rest:75,inc:2.5,iso:1,v:[
+   {id:'leg_curl_s',img:1,n:'Leg curl sentado',
+    cues:['Joelho alinhado com o eixo da máquina.','Dobra até ao fim e aperta 1 s.','Volta em 3 s.']},
+   {id:'leg_curl_pe',n:'Leg curl em pé, uma perna',
+    cues:['Joelho alinhado com o eixo da máquina.','Dobra até ao fim e aperta 1 s.','Volta devagar, sem deixar o peso bater.']},
+   {id:'leg_curl_s_uni',n:'Leg curl sentado, uma perna de cada vez',
+    cues:['Tronco ligeiramente inclinado à frente: estica mais os posteriores.','Dobra até ao fim e aperta 1 s.','Volta em 3 s.']}]},
+  {sets:4,reps:[10,15],rest:60,inc:5,iso:1,v:[
+   {id:'gemeos_pe',img:1,n:'Gémeos em pé',
+    cues:['Pausa 1–2 s em baixo, em alongamento.','Sobe até à ponta dos pés.','Sem saltitar.']},
+   {id:'gemeos_lp',n:'Gémeos no leg press',
+    cues:['Só a ponta dos pés na parte de baixo da plataforma.','Joelhos esticados mas não trancados.','Pausa 1–2 s em baixo, em alongamento.'],
+    care:'Tira e põe a trava de segurança com os pés inteiros na plataforma, nunca só com a ponta.'},
+   {id:'gemeos_smith',n:'Gémeos no Smith com os pés num step',
+    cues:['Pontas dos pés num step, calcanhares no ar.','Desce bem abaixo do step e pausa 1–2 s.','Sobe até à ponta dos pés.']}]},
+  {sets:3,reps:[10,12],rest:60,inc:1,v:[
+   {id:'pallof',img:1,n:'Pallof press (por lado)',
+    cues:['De lado para a polia, cabo à altura do peito.','Estica os braços à frente e não deixes o tronco rodar.','Abdómen firme e respira normalmente.']},
+   {id:'dead_bug',n:'Dead bug com halter leve (por lado)',
+    cues:['Deitado de costas, braços para cima e joelhos a 90°.','Estica um braço e a perna oposta sem a lombar descolar do chão.','Volta e troca de lado.']},
+   {id:'cable_chop',n:'Lenhador no cabo, de cima para baixo (por lado)',inc:2.5,
+    cues:['Polia alta, de lado para ela.','Puxa em diagonal até à anca oposta, a rodar os ombros e não a lombar.','Volta devagar.']}]}
  ]},
  C:{name:'Superior · Volume',plate:15,cls:'yellow',dur:'60–70 min',ex:[
-  {id:'chest_press',n:'Chest press na máquina',sets:3,reps:[10,12],rest:90,inc:2.5,
-   cues:['Ajusta o banco para as pegas ficarem a meio do peito.','Omoplatas encostadas ao encosto.','Empurra sem bloquear os cotovelos.']},
-  {id:'remada_uni',n:'Remada unilateral com halter',sets:3,reps:[10,12],rest:75,inc:2,
-   cues:['Mão e joelho apoiados no banco, costas planas.','Puxa o halter em direção à anca, não ao peito.','Sente o dorsal a esticar em baixo.']},
-  {id:'puxada_neutra',n:'Puxada pega neutra',sets:3,reps:[10,12],rest:90,inc:2.5,
-   cues:['Pega com as palmas viradas uma para a outra.','Peito em direção à barra, cotovelos para baixo.','Controla a subida.']},
-  {id:'cruc_cabo',n:'Crucifixo no cabo ou peck deck',sets:3,reps:[12,15],rest:60,inc:2.5,
-   cues:['Cotovelos ligeiramente dobrados e fixos.','Movimento de abraçar uma árvore.','Aperta o peito 1 s ao centro.']},
-  {id:'face_pull',n:'Face pull',sets:3,reps:[15,20],rest:60,inc:2.5,
-   cues:['Corda à altura da cara.','Puxa para a testa, abrindo as mãos para fora.','Cotovelos altos.'],
-   care:'Exercício de saúde dos ombros. Não o saltes.'},
-  {id:'elev_lat_cabo',n:'Elevação lateral no cabo',sets:3,reps:[12,15],rest:60,inc:1.25,
-   cues:['Polia baixa, um braço de cada vez.','Tensão constante, sobe até à altura do ombro.','Desce em 2–3 s.']},
-  {id:'curl_martelo',n:'Curl martelo',sets:3,reps:[10,12],rest:60,inc:1,
-   cues:['Palmas viradas uma para a outra.','Cotovelos fixos ao lado do corpo.','Sem balançar o tronco.']},
-  {id:'tric_cabeca',n:'Tríceps acima da cabeça (cabo)',sets:3,reps:[10,12],rest:60,inc:2.5,
-   cues:['De costas para a polia, corda atrás da cabeça.','Estica os braços para a frente e para cima.','Cotovelos apontados para a frente.'],
-   care:'Se o cotovelo doer, troca por tríceps com corda.'}
+  {sets:3,reps:[10,12],rest:90,inc:2.5,v:[
+   {id:'chest_press',img:1,n:'Chest press na máquina',
+    cues:['Ajusta o banco para as pegas ficarem a meio do peito.','Omoplatas encostadas ao encosto.','Empurra sem bloquear os cotovelos.']},
+   {id:'chest_press_incl',n:'Chest press inclinado na máquina',
+    cues:['Pegas à altura da parte de cima do peito.','Omoplatas encostadas ao encosto.','Empurra sem bloquear os cotovelos.']},
+   {id:'sup_neutro',n:'Supino plano com halteres, pega neutra',inc:2,
+    cues:['Palmas viradas uma para a outra.','Cotovelos junto ao corpo ao descer.','Desce até os halteres ficarem quase a tocar no peito.']}]},
+  {sets:3,reps:[10,12],rest:75,inc:2,v:[
+   {id:'remada_uni',img:1,n:'Remada unilateral com halter',
+    cues:['Mão e joelho apoiados no banco, costas planas.','Puxa o halter em direção à anca, não ao peito.','Sente o dorsal a esticar em baixo.']},
+   {id:'remada_uni_cabo',n:'Remada unilateral no cabo, sentado',inc:2.5,
+    cues:['Polia à altura do peito ou mais baixa.','Puxa o cotovelo para trás junto ao corpo, com uma ligeira rotação do tronco no fim.','Estica bem o braço à frente na volta.']},
+   {id:'remada_uni_maq',n:'Remada unilateral na máquina com apoio no peito',inc:2.5,
+    cues:['Peito encostado ao apoio.','Puxa um braço de cada vez até à anca.','Aperta 1 s e volta devagar.']}]},
+  {sets:3,reps:[10,12],rest:90,inc:2.5,v:[
+   {id:'puxada_neutra',img:1,n:'Puxada pega neutra',
+    cues:['Pega com as palmas viradas uma para a outra.','Peito em direção à barra, cotovelos para baixo.','Controla a subida.']},
+   {id:'pullover_cabo',n:'Pullover no cabo, braços esticados',
+    cues:['Polia alta, corda ou barra reta.','Tronco inclinado ~30° à frente, braços quase esticados.','Leva as mãos até às coxas a puxar com o dorsal.']},
+   {id:'puxada_sup',n:'Puxada pega supinada (palmas viradas para ti)',
+    cues:['Pega à largura dos ombros, palmas viradas para ti.','Puxa a barra até ao peito, cotovelos junto ao corpo.','Sobe até esticar bem.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:2.5,iso:1,v:[
+   {id:'cruc_cabo',img:1,n:'Crucifixo no cabo ou peck deck',
+    cues:['Cotovelos ligeiramente dobrados e fixos.','Movimento de abraçar uma árvore.','Aperta o peito 1 s ao centro.']},
+   {id:'cross_baixo',n:'Crossover de baixo para cima (polias baixas)',
+    cues:['Polias em baixo, um passo à frente.','Sobe as mãos em arco até à altura do queixo.','Aperta a parte de cima do peito 1 s.']},
+   {id:'cruc_incl_h',n:'Crucifixo inclinado com halteres',inc:1,
+    cues:['Banco a 30°, cotovelos ligeiramente dobrados e fixos.','Abre até sentir o peito esticar, não mais.','Fecha em arco, como a abraçar.'],
+    care:'Peso moderado: o ombro fica exposto na posição esticada.'}]},
+  {sets:3,reps:[15,20],rest:60,inc:2.5,iso:1,v:[
+   {id:'face_pull',img:1,n:'Face pull',
+    cues:['Corda à altura da cara.','Puxa para a testa, abrindo as mãos para fora.','Cotovelos altos.'],
+    care:'Exercício de saúde dos ombros. Não o saltes.'},
+   {id:'rev_pec',n:'Peck deck invertido (deltoide posterior)',
+    cues:['De frente para o encosto, pegas à altura dos ombros.','Abre os braços para trás com os cotovelos ligeiramente dobrados.','Pausa 1 s atrás e volta devagar.']},
+   {id:'y_raise',n:'Elevação em Y deitado num banco inclinado',inc:1,
+    cues:['Barriga encostada a um banco a 30–45°.','Sobe os braços em forma de Y, polegares para cima.','Halteres muito leves e pausa 1 s em cima.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:1.25,iso:1,v:[
+   {id:'elev_lat_cabo',img:1,n:'Elevação lateral no cabo',
+    cues:['Polia baixa, um braço de cada vez.','Tensão constante, sobe até à altura do ombro.','Desce em 2–3 s.']},
+   {id:'elev_lat_sent',n:'Elevação lateral com halteres, sentado',inc:1,
+    cues:['Sentado na ponta do banco, costas direitas.','Sobe até à altura dos ombros, cotovelos ligeiramente dobrados.','Sentado não dá para fazer batota com o tronco.']},
+   {id:'elev_lat_cabo_tras',n:'Elevação lateral no cabo, com o cabo por trás das costas',
+    cues:['Polia baixa, cabo a passar por trás do corpo.','Sobe o braço de lado até à altura do ombro.','Desce em 2–3 s, sempre com tensão.']}]},
+  {sets:3,reps:[10,12],rest:60,inc:1,iso:1,v:[
+   {id:'curl_martelo',img:1,n:'Curl martelo',
+    cues:['Palmas viradas uma para a outra.','Cotovelos fixos ao lado do corpo.','Sem balançar o tronco.']},
+   {id:'curl_corda',n:'Curl martelo na polia com corda',inc:2.5,
+    cues:['Polia baixa, palmas viradas uma para a outra.','Cotovelos fixos junto ao corpo.','Sobe até ao peito e desce devagar.']},
+   {id:'curl_ez',n:'Curl com barra EZ',inc:2.5,
+    cues:['Pega nas curvas da barra.','Cotovelos fixos, sem balançar o tronco.','Desce até quase esticar.']}]},
+  {sets:3,reps:[10,12],rest:60,inc:2.5,iso:1,v:[
+   {id:'tric_cabeca',img:1,n:'Tríceps acima da cabeça (cabo)',
+    cues:['De costas para a polia, corda atrás da cabeça.','Estica os braços para a frente e para cima.','Cotovelos apontados para a frente.'],
+    care:'Se o cotovelo doer, troca por tríceps com corda.'},
+   {id:'tric_halter_cab',n:'Tríceps acima da cabeça com um halter (duas mãos)',inc:2,
+    cues:['Sentado com encosto, halter seguro com as duas mãos.','Desce o halter atrás da cabeça, cotovelos a apontar para cima.','Estica os braços sem arquear a lombar.'],
+    care:'Se o cotovelo doer, troca por tríceps com corda.'},
+   {id:'tric_maq',n:'Extensão de tríceps na máquina',
+    cues:['Cotovelos alinhados com o eixo da máquina.','Estica totalmente e aperta 1 s.','Volta devagar.']}]}
  ]},
  D:{name:'Inferior · Glúteos e core',plate:10,cls:'green',dur:'55–60 min',ex:[
-  {id:'hack',n:'Hack squat ou agachamento goblet',sets:4,reps:[8,12],rest:150,inc:5,
-   cues:['Pés à largura dos ombros.','Desce controlado até onde manténs as costas neutras.','Os joelhos podem passar a ponta dos pés. Empurra o chão.'],
-   care:'Se não houver hack squat, faz goblet com halter encostado ao peito.'},
-  {id:'hip_thrust',n:'Hip thrust',sets:3,reps:[8,12],rest:120,inc:5,
-   cues:['Omoplatas apoiadas no banco, queixo ao peito.','Sobe até a anca ficar em linha com o tronco.','Aperta os glúteos 1 s em cima.']},
-  {id:'leg_ext',n:'Extensão de pernas',sets:3,reps:[12,15],rest:60,inc:2.5,
-   cues:['Sobe em 1 s, pausa em cima.','Desce em 3 s.'],
-   care:'Carga moderada se tiveres historial de dor no joelho.'},
-  {id:'leg_curl_d',n:'Leg curl deitado',sets:3,reps:[10,12],rest:75,inc:2.5,
-   cues:['Anca bem encostada ao banco.','Não levantes o rabo ao subir.','Volta devagar.']},
-  {id:'gemeos_sent',n:'Gémeos sentado',sets:3,reps:[12,15],rest:60,inc:2.5,
-   cues:['Joelhos a 90°.','Pausa em baixo, sobe até ao topo.']},
-  {id:'abd_cabo',n:'Abdominal na polia, de joelhos',sets:3,reps:[12,15],rest:60,inc:2.5,
-   cues:['Enrola a coluna, aproximando as costelas da bacia.','Os braços só seguram a corda, não puxam.']}
+  {sets:4,reps:[8,12],rest:150,inc:5,v:[
+   {id:'hack',img:1,n:'Hack squat ou agachamento goblet',
+    cues:['Pés à largura dos ombros.','Desce controlado até onde manténs as costas neutras.','Os joelhos podem passar a ponta dos pés. Empurra o chão.'],
+    care:'Se não houver hack squat, faz goblet com halter encostado ao peito.'},
+   {id:'goblet',n:'Agachamento goblet com halter',inc:2,
+    cues:['Halter encostado ao peito, cotovelos para baixo.','Desce entre os joelhos, tronco direito.','Empurra o chão com o pé inteiro.']},
+   {id:'pendulum',n:'Pendulum squat (ou leg press com os pés em baixo)',
+    cues:['Costas bem encostadas ao apoio.','Desce fundo e controlado, até onde a lombar não descola.','Sobe empurrando com os pés a meio da plataforma.'],
+    care:'Sem pendulum no ginásio, faz leg press com os pés na parte de baixo da plataforma.'}]},
+  {sets:3,reps:[8,12],rest:120,inc:5,v:[
+   {id:'hip_thrust',img:1,n:'Hip thrust',
+    cues:['Omoplatas apoiadas no banco, queixo ao peito.','Sobe até a anca ficar em linha com o tronco.','Aperta os glúteos 1 s em cima.']},
+   {id:'hip_thrust_maq',n:'Hip thrust na máquina (glute drive)',
+    cues:['Cinto por cima da anca, costas encostadas ao apoio.','Sobe até a anca ficar em linha com o tronco.','Aperta os glúteos 1 s em cima.']},
+   {id:'pull_through',n:'Pull-through no cabo, de costas para a polia',inc:2.5,
+    cues:['Polia baixa, corda entre as pernas.','Leva a anca para trás com as costas direitas.','Volta a ficar de pé a apertar os glúteos.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:2.5,iso:1,v:[
+   {id:'leg_ext',img:1,n:'Extensão de pernas',
+    cues:['Sobe em 1 s, pausa em cima.','Desce em 3 s.'],
+    care:'Carga moderada se tiveres historial de dor no joelho.'},
+   {id:'leg_ext_uni',n:'Extensão de pernas, uma perna de cada vez',
+    cues:['Encosto ajustado para o joelho alinhar com o eixo.','Sobe em 1 s e pausa em cima.','Desce em 3 s.']},
+   {id:'leg_ext_incl',n:'Extensão de pernas com o tronco recostado',
+    cues:['Inclina o encosto para trás, ou recosta o tronco: alonga mais a parte da frente da coxa.','Sobe e pausa 1 s em cima.','Desce em 3 s.'],
+    care:'Carga moderada se tiveres historial de dor no joelho.'}]},
+  {sets:3,reps:[10,12],rest:75,inc:2.5,iso:1,v:[
+   {id:'leg_curl_d',img:1,n:'Leg curl deitado',
+    cues:['Anca bem encostada ao banco.','Não levantes o rabo ao subir.','Volta devagar.']},
+   {id:'leg_curl_d_uni',n:'Leg curl deitado, uma perna de cada vez',
+    cues:['Anca bem encostada.','Dobra até ao fim e aperta 1 s.','Volta devagar.']},
+   {id:'leg_curl_cabo',n:'Leg curl no cabo, em pé (com tornozeleira)',
+    cues:['Tornozeleira presa à polia baixa, de frente para a máquina.','Dobra o joelho sem mexer a coxa.','Volta devagar até esticar.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:2.5,iso:1,v:[
+   {id:'gemeos_sent',img:1,n:'Gémeos sentado',
+    cues:['Joelhos a 90°.','Pausa em baixo, sobe até ao topo.']},
+   {id:'gemeos_burro',n:'Gémeos tipo burro na máquina (tronco inclinado)',inc:5,
+    cues:['Anca dobrada a 90°, costas direitas.','Desce bem o calcanhar e pausa 1–2 s.','Sobe até à ponta dos pés.']},
+   {id:'gemeos_uni',n:'Gémeos em pé numa perna, com halter',inc:2,
+    cues:['Ponta do pé num step, a outra mão num apoio.','Desce fundo, pausa e sobe até ao topo.','Mesmas reps em cada perna.']}]},
+  {sets:3,reps:[12,15],rest:60,inc:2.5,v:[
+   {id:'abd_cabo',img:1,n:'Abdominal na polia, de joelhos',
+    cues:['Enrola a coluna, aproximando as costelas da bacia.','Os braços só seguram a corda, não puxam.']},
+   {id:'abd_maq',n:'Abdominal na máquina',
+    cues:['Enrola a coluna, aproximando as costelas da bacia.','Expira ao fechar.','Volta devagar, sem deixar o peso bater.']},
+   {id:'elev_pernas',n:'Elevação de pernas na cadeira romana',
+    cues:['Antebraços apoiados, costas encostadas.','Sobe os joelhos ao peito a enrolar a bacia.','Desce devagar, sem balançar.'],
+    care:'Sem peso: progride com mais reps; quando for fácil, faz com as pernas esticadas.'}]}
  ]}
 };
+/* variante de cada posto para o treino de hoje: roda sempre que o treino se repete */
+function rot(code){return S.history.filter(h=>h.code===code&&h.d<TODAY).length}
+function exList(code){const r=rot(code);return SESS[code].ex.map((sl,i)=>{const vi=r%sl.v.length;return Object.assign({},sl,sl.v[vi],{slot:i,vi,nv:sl.v.length})})}
+function allVar(code){return SESS[code].ex.flatMap(sl=>sl.v)}
+/* esforço por semana do ciclo (RIR = repetições em reserva) */
+function rirTxt(wk,iso){return wk===1?'3 reps em reserva':wk===2?'2 reps em reserva':wk===3?'1–2 reps em reserva':wk===4?(iso?'0–1 reps em reserva':'1 rep em reserva'):'leve, longe da falha'}
 const SCHED={0:'rest',1:'A',2:'B',3:'walk',4:'C',5:'D',6:'walk'};
 const DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DAYS_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
@@ -376,7 +534,7 @@ let S=load();
 S.profile=Object.assign(defProfile(),S.profile);
 
 /* ---------- HISTÓRICO: registo de cada treino guardado ---------- */
-const EXN={};Object.values(SESS).forEach(s=>s.ex.forEach(e=>EXN[e.id]=e.n));
+const EXN={};Object.values(SESS).forEach(s=>s.ex.forEach(sl=>sl.v.forEach(e=>EXN[e.id]=e.n)));
 const MET=5; /* musculação: ~5 MET, usado só quando não há dados do relógio */
 function mkHist(d,code,exs,t0,t1){let sets=0,reps=0,vol=0;exs.forEach(e=>e.sets.forEach(s=>{sets++;reps+=s.r;vol+=(s.kg||0)*s.r}));
  let dur=t0&&t1?Math.round((t1-t0)/60000):null;if(dur!==null&&(dur<5||dur>180))dur=null;
@@ -384,7 +542,7 @@ function mkHist(d,code,exs,t0,t1){let sets=0,reps=0,vol=0;exs.forEach(e=>e.sets.
 /* treinos guardados antes desta versão: reconstrói-os a partir dos registos de séries */
 if(S.histV!==1){
  S.sessions.forEach(x=>{if(!SESS[x.code]||S.history.some(h=>h.d===x.d&&h.code===x.code))return;
-  const exs=SESS[x.code].ex.map(e=>{const l=(S.logs[e.id]||[]).find(y=>y.d===x.d);return l?{id:e.id,sets:l.sets}:null}).filter(Boolean);
+  const exs=allVar(x.code).map(e=>{const l=(S.logs[e.id]||[]).find(y=>y.d===x.d);return l?{id:e.id,sets:l.sets}:null}).filter(Boolean);
   if(exs.length)S.history.push(mkHist(x.d,x.code,exs))});
  S.history.sort((a,b)=>a.d<b.d?-1:1);S.histV=1;save();
 }
@@ -466,12 +624,12 @@ function vHoje(){
  <p class="eyebrow">Escolhe o treino de hoje · a app sabe o próximo</p>
  <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Hoje</small>':c===nx?'<small class="nx">Próxima</small>':''}</button>`).join('')}</div>
  <div class="nextline"><span>Próximo treino</span><b><i class="dot p-${SESS[nx].cls}"></i>${nx} · ${SESS[nx].name}</b></div>
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> do ciclo. Tenta bater a última sessão: +1 repetição ou +peso.`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Cada exercício está noutra variante desta vez: tenta bater a última vez que fizeste essa variante (+1 rep ou +peso).`}</div>`;
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
  <div class="card"><h3>Aquecimento · 8–10 min</h3><p class="muted" style="margin-top:4px">5 min de bicicleta ou elíptica, círculos de braços e ancas, depois 2 séries leves do primeiro exercício (50% e 75% do peso).</p></div>`;
- s.ex.forEach((ex,i)=>{
-  const g=sugg(ex),n=deload?Math.ceil(ex.sets/2):ex.sets;
+ exList(code).forEach((ex,i)=>{
+  const g=sugg(ex),n=deload?Math.ceil(ex.sets/2):ex.sets+(ex.iso&&wk>=3?1:0);
   const pre=g&&g.top?(deload?half(g.top*0.9):g.next):null;
   const vals=d.v[ex.id]||[];
   let rows='';
@@ -481,10 +639,10 @@ function vHoje(){
    <label class="fld"><input id="r-${ex.id}-${k}" data-ex="${ex.id}" data-k="${k}" data-f="r" inputmode="numeric" autocomplete="off" placeholder="${ex.reps[0]}–${ex.reps[1]}" value="${v.r!=null?v.r:''}" aria-label="Repetições série ${k+1}"><span>reps</span></label>
    <button class="chk" data-act="done" data-ex="${ex.id}" data-k="${k}" data-rest="${ex.rest}" aria-label="Série ${k+1} feita">✓</button></div>`}
   let hist='<p class="hist">Primeira vez: escolhe um peso em que acabas com 2–3 repetições de reserva.</p>';
-  if(g){hist=`<p class="hist">Última vez (${dshort(g.l.d)}): ${fmt(g.top)} kg × ${g.l.sets.map(x=>x.r).join(', ')}`+
-    (g.hit&&!deload?` · <span class="up">sobe para ${fmt(g.next)} kg</span>`:'')+'</p>'}
-  h+=`<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · descanso ${restTxt(ex.rest)}</p></div><span class="ex-idx">${pad(i+1)}</span></div>
-  ${pics(ex)}${hist}<div class="sets">${rows}</div>
+  if(g){hist=`<p class="hist">Última vez com esta variante (${dshort(g.l.d)}): ${g.top?fmt(g.top)+' kg × ':''}${g.l.sets.map(x=>x.r).join(', ')}${g.top?'':' reps'}`+
+    (g.hit&&!deload&&g.top?` · <span class="up">sobe para ${fmt(g.next)} kg</span>`:'')+'</p>'}
+  h+=`<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR').replace(' rep em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">Variante ${ex.vi+1} de ${ex.nv} · na próxima vez muda</p></div><span class="ex-idx">${pad(i+1)}</span></div>
+  ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>
   <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
  });
  if(NATIVE&&S.hc.on)h+=`<div class="card"><div class="ex-head"><h3>Relógio · hoje</h3><button class="btn ghost sm" data-act="watch">Atualizar</button></div>${watchCard(TODAY)}</div>`;
@@ -532,10 +690,12 @@ function vPlano(){
   <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div></div>`;
  Object.entries(SESS).forEach(([c,s])=>{
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
-  <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${s.ex.map(ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary><div style="margin-top:8px">${pics(ex)}</div><ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details>`).join('')}</div></div>`;
+  <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${exList(c).map(ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary>${ex.img?`<div style="margin-top:8px">${pics(ex)}</div>`:''}<ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details>`).join('')}</div></div>`;
  });
  h+=`<div class="card stack"><h2>Regras do jogo</h2><ul class="list">
-  <li><b>Esforço:</b> acaba cada série com 1–3 repetições em reserva (RIR). Técnica limpa vale mais que peso.</li>
+  <li><b>Esforço sobe ao longo do ciclo:</b> semana 1 com 3 repetições em reserva (RIR), semana 2 com 2, semana 3 com 1–2, semana 4 com 1 (isolamento até 0–1). Técnica limpa vale mais que peso.</li>
+  <li><b>Volume:</b> nas semanas 3 e 4 os exercícios de isolamento ganham +1 série.</li>
+  <li><b>Variantes:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). Sempre que repetes o treino, muda para a seguinte. A app compara sempre com a última vez que fizeste a mesma variante.</li>
   <li><b>Progressão dupla:</b> quando fazes o topo da faixa em todas as séries, sobe o peso (≈2 kg tronco, 5 kg pernas). A app avisa no ecrã Hoje.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
   <li><b>Descarga:</b> a cada 5.ª semana, metade das séries e −10% de peso. Tendões e articulações precisam disto.</li>
@@ -684,7 +844,7 @@ document.addEventListener('click',e=>{
  }
  else if(a==='save'){
   const code=b.dataset.code,d=draft(code);let n=0;const exs=[],prs=[];
-  SESS[code].ex.forEach(ex=>{const sets=(d.v[ex.id]||[]).filter(s=>s&&s.r>0).map(s=>({kg:s.kg||0,r:s.r}));
+  exList(code).forEach(ex=>{const sets=(d.v[ex.id]||[]).filter(s=>s&&s.r>0).map(s=>({kg:s.kg||0,r:s.r}));
    if(sets.length){
     let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
     const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
@@ -705,7 +865,7 @@ document.addEventListener('click',e=>{
   S.weights=[{d:TODAY,kg:w}];S.start=TODAY;S.setup=true;save();ui.tab='hoje';render();window.scrollTo(0,0);toast('Tudo pronto. Bom treino!')}
  else if(a==='hdel'){const dd=b.dataset.d,cc=b.dataset.c;if(!confirm(`Apagar o treino ${cc} de ${dshort(dd)}?`))return;
   S.history=S.history.filter(h=>!(h.d===dd&&h.code===cc));S.sessions=S.sessions.filter(x=>!(x.d===dd&&x.code===cc));
-  SESS[cc].ex.forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
+  allVar(cc).forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
  else if(a==='weigh'){const v=num($('#w-in').value);if(!v||v<30||v>250){toast('Escreve o peso em kg, por exemplo 86,4');return}
   S.weights=S.weights.filter(x=>x.d!==TODAY);S.weights.push({d:TODAY,kg:v});S.weights.sort((x,y)=>x.d<y.d?-1:1);S.profile.w=v;save();render();toast('Peso registado')}
  else if(a==='adj'){S.adj+=+b.dataset.v;save();render();toast(`Novo alvo: ${targets().kcal} kcal`)}
