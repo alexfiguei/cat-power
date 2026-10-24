@@ -329,7 +329,7 @@ const SESS={
     care:'Tira e põe a trava de segurança com os pés inteiros na plataforma, nunca só com a ponta.'},
    {id:'gemeos_smith',n:'Gémeos no Smith com os pés num step',
     cues:['Pontas dos pés num step, calcanhares no ar.','Desce bem abaixo do step e pausa 1–2 s.','Sobe até à ponta dos pés.']}]},
-  {sets:3,reps:[10,12],rest:60,inc:1,v:[
+  {sets:3,reps:[10,12],rest:60,inc:1,core:1,v:[
    {id:'pallof',img:1,n:'Pallof press (por lado)',
     cues:['De lado para a polia, cabo à altura do peito.','Estica os braços à frente e não deixes o tronco rodar.','Abdómen firme e respira normalmente.']},
    {id:'dead_bug',n:'Dead bug com halter leve (por lado)',
@@ -439,7 +439,7 @@ const SESS={
     cues:['Anca dobrada a 90°, costas direitas.','Desce bem o calcanhar e pausa 1–2 s.','Sobe até à ponta dos pés.']},
    {id:'gemeos_uni',n:'Gémeos em pé numa perna, com halter',inc:2,
     cues:['Ponta do pé num step, a outra mão num apoio.','Desce fundo, pausa e sobe até ao topo.','Mesmas reps em cada perna.']}]},
-  {sets:3,reps:[12,15],rest:60,inc:2.5,v:[
+  {sets:3,reps:[12,15],rest:60,inc:2.5,core:1,v:[
    {id:'abd_cabo',img:1,n:'Abdominal na polia, de joelhos',
     cues:['Enrola a coluna, aproximando as costelas da bacia.','Os braços só seguram a corda, não puxam.']},
    {id:'abd_maq',n:'Abdominal na máquina',
@@ -448,6 +448,13 @@ const SESS={
     cues:['Antebraços apoiados, costas encostadas.','Sobe os joelhos ao peito a enrolar a bacia.','Desce devagar, sem balançar.'],
     care:'Sem peso: progride com mais reps; quando for fácil, faz com as pernas esticadas.'}]}
  ]}
+};
+/* ativação: leve, sem cansar, para sentir o músculo antes dos compostos */
+const ACT={
+ A:[['Afastar elástico à frente do peito (band pull-apart)','2 × 15'],['Rotação externa do ombro com elástico','2 × 12 por lado'],['Flexões escapulares (só as omoplatas mexem)','1 × 10']],
+ B:[['Ponte de glúteos no chão, pausa 2 s em cima','2 × 15'],['Passos laterais com elástico nos joelhos','2 × 10 por lado'],['Agachamento sem peso, lento','1 × 10']],
+ C:[['Afastar elástico à frente do peito (band pull-apart)','2 × 15'],['Face pull leve com elástico','1 × 15'],['Flexões na parede ou no banco','1 × 10']],
+ D:[['Ponte de glúteos com elástico nos joelhos, pausa 2 s','2 × 15'],['Abdução deitado de lado (concha) com elástico','2 × 12 por lado'],['Passos laterais com elástico (monster walk)','2 × 10 por lado']]
 };
 /* variante de cada posto para o treino de hoje: roda sempre que o treino se repete */
 function rot(code){return S.history.filter(h=>h.code===code&&h.d<TODAY).length}
@@ -627,8 +634,13 @@ function vHoje(){
  <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Cada exercício está noutra variante desta vez: tenta bater a última vez que fizeste essa variante (+1 rep ou +peso).`}</div>`;
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
- <div class="card"><h3>Aquecimento · 8–10 min</h3><p class="muted" style="margin-top:4px">5 min de bicicleta ou elíptica, círculos de braços e ancas, depois 2 séries leves do primeiro exercício (50% e 75% do peso).</p></div>`;
+ <div class="card stack"><div><p class="eyebrow">Fase 1 · 10–12 min</p><h3>Aquecimento e ativação</h3></div>
+  <p class="muted" style="font-size:.95rem">5 min de bicicleta ou elíptica. Depois ativa os músculos de hoje, sem cansar: o objetivo é sentir o músculo a trabalhar.</p>
+  <div>${ACT[code].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
+  <p class="muted" style="font-size:.9rem">No fim, 2 séries leves do 1.º exercício (50% e 75% do peso).</p></div>`;
+ let ph=0;
  exList(code).forEach((ex,i)=>{
+  const f=ex.core?4:ex.iso?3:2;if(f!==ph){ph=f;h+=`<div><p class="eyebrow">Fase ${f===4?(code==='B'||code==='D'?4:3):f} · ${f===2?'Compostos pesados':f===3?'Isolamento':'Core'}</p><p class="muted" style="font-size:.9rem">${f===2?'Os exercícios mais pesados, com o músculo fresco. É aqui que se progride mais.':f===3?'Trabalho dirigido a cada músculo, já pré-cansado pelos compostos.':'Estabilidade do tronco, no fim para não cansar antes dos pesados.'}</p></div>`}
   const g=sugg(ex),n=deload?Math.ceil(ex.sets/2):ex.sets+(ex.iso&&wk>=3?1:0);
   const pre=g&&g.top?(deload?half(g.top*0.9):g.next):null;
   const vals=d.v[ex.id]||[];
@@ -693,6 +705,7 @@ function vPlano(){
   <div style="margin-top:10px;display:flex;flex-direction:column;gap:8px">${exList(c).map(ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]}</span></summary>${ex.img?`<div style="margin-top:8px">${pics(ex)}</div>`:''}<ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details>`).join('')}</div></div>`;
  });
  h+=`<div class="card stack"><h2>Regras do jogo</h2><ul class="list">
+  <li><b>Ordem de cada treino:</b> 1) aquecimento e ativação leve, 2) compostos pesados (vários músculos e articulações), 3) isolamento, 4) core no fim.</li>
   <li><b>Esforço sobe ao longo do ciclo:</b> semana 1 com 3 repetições em reserva (RIR), semana 2 com 2, semana 3 com 1–2, semana 4 com 1 (isolamento até 0–1). Técnica limpa vale mais que peso.</li>
   <li><b>Volume:</b> nas semanas 3 e 4 os exercícios de isolamento ganham +1 série.</li>
   <li><b>Variantes:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). Sempre que repetes o treino, muda para a seguinte. A app compara sempre com a última vez que fizeste a mesma variante.</li>
