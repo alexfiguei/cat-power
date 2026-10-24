@@ -9,9 +9,9 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <script>
 /* Duas versões no mesmo site: a do dono (Cat Power) e a da Mary (abre com ?u=mary e fica memorizada) */
-(function(){var q=new URLSearchParams(location.search).get('u'),f=q;
- try{if(q)localStorage.setItem('cp_flavor',q);f=localStorage.getItem('cp_flavor')||q}catch(e){}
- window.FLAV=f==='mary'?'mary':'cat';window.APPNAME=FLAV==='mary'?'Mary Amor Power':'Cat Power';
+(function(){var q=new URLSearchParams(location.search).get('u');
+ try{localStorage.removeItem('cp_flavor')}catch(e){}
+ window.FLAV=q==='mary'?'mary':'cat';window.APPNAME=FLAV==='mary'?'Mary Amor Power':'Cat Power';
  if(FLAV==='mary'){document.documentElement.classList.add('mary');
   document.querySelector('link[rel=manifest]').href='manifest-mary.webmanifest';
   document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(function(x){x.href='icons/mary-192.png'})}})();
@@ -535,10 +535,10 @@ const TODAY=iso(new Date());
 const fmt=n=>String(Math.round(n*100)/100).replace('.',',');
 const num=v=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
 const dshort=s=>s.slice(8,10)+'/'+s.slice(5,7);
-const KEY='massa47_v1';
+const KEY=FLAV==='mary'?'massa47_mary_v1':'massa47_v1';
 function defProfile(){return FLAV==='mary'?{sex:'f',age:null,h:164,w:65,act:1.55,goal:null}:{sex:'m',age:47,h:184,w:86,act:1.55,goal:'ganhar'}}
 function defState(){const p=defProfile();return{profile:p,setup:FLAV!=='mary',adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:p.w}],drafts:{},sessions:[],hc:{on:false},watch:{},history:[],histV:0}}
-function load(){try{const r=localStorage.getItem(KEY);if(r)return Object.assign(defState(),JSON.parse(r))}catch(e){}return defState()}
+function load(){try{let r=localStorage.getItem(KEY);if(!r&&FLAV==='mary')r=localStorage.getItem('massa47_v1');if(r)return Object.assign(defState(),JSON.parse(r))}catch(e){}return defState()}
 function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
 let S=load();
 S.profile=Object.assign(defProfile(),S.profile);
