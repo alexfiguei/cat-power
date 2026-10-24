@@ -34,6 +34,7 @@
 /* Sempre claro, mesmo com o telemóvel em modo escuro */
 :root,:root[data-theme="dark"]{color-scheme:light}
 html.mary{--accent:#E8457A}
+html.mary .brand svg{display:none}
 
 *{box-sizing:border-box}
 body{background:var(--bg);color:var(--ink);font-family:var(--body);font-size:16px;line-height:1.45;-webkit-text-size-adjust:100%}
@@ -54,6 +55,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 /* marca */
 .brand{display:flex;align-items:center;gap:10px;margin-bottom:16px}
 .brand svg{width:42px;height:42px;flex:none}
+.brand img,.avatar{width:46px;height:46px;border-radius:50%;flex:none;object-fit:cover}
+.avatar.big{width:84px;height:84px}
 .brand b{font-family:var(--display);font-size:1.6rem;text-transform:uppercase;font-weight:800;display:block;line-height:1;letter-spacing:.02em}
 .brand small{font-size:.72rem;letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
@@ -204,7 +207,7 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 <body>
 
 
-<div class="wrap"><header class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 5l10 8h10l10-8v19c0 7.5-6.5 13-15 13S5 31.5 5 24z" fill="var(--ink)"/><path d="M12.5 22.5l5.5 2M27.5 22.5l-5.5 2" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round"/></svg><div><b id="appname">Cat Power</b><small>O teu treino. O teu ritmo.</small></div></header><div id="app"></div></div>
+<div class="wrap"><header class="brand"><svg viewBox="0 0 40 40" aria-hidden="true"><path d="M5 5l10 8h10l10-8v19c0 7.5-6.5 13-15 13S5 31.5 5 24z" fill="var(--ink)"/><path d="M12.5 22.5l5.5 2M27.5 22.5l-5.5 2" stroke="var(--accent)" stroke-width="2.6" stroke-linecap="round"/></svg><img id="brand-img" alt="" hidden><div><b id="appname">Cat Power</b><small>O teu treino. O teu ritmo.</small></div></header><div id="app"></div></div>
 
 <div id="timer" hidden role="timer" aria-live="polite">
   <div class="tt"><div id="t-time">1:30</div><div id="t-label">Descanso</div></div>
@@ -796,7 +799,7 @@ function profForm(p){return `<div class="form">
    <option value="1.55" ${p.act==1.55?'selected':''}>Misto: algum tempo de pé e a andar</option>
    <option value="1.65" ${p.act==1.65?'selected':''}>Muito tempo de pé ou trabalho físico</option></select></label></div>`}
 function vSetup(){const m=FLAV==='mary';
- return `<div class="stack"><div><p class="eyebrow">${m?'Olá, Mary':'Bem-vindo'}</p><h1>Vamos começar</h1></div>
+ return `<div class="stack"><div style="display:flex;align-items:center;gap:14px">${m?'<img class="avatar big" src="icons/mary-avatar.png" alt="Mary">':''}<div><p class="eyebrow">${m?'Olá, Mary':'Bem-vindo'}</p><h1>Vamos começar</h1></div></div>
  <div class="card stack"><p>Preenche os teus dados. A app calcula as calorias e a alimentação para o teu objetivo e ajusta-se quando o peso muda.</p>
   ${profForm(S.profile)}<button class="btn" data-act="setup">Começar</button></div>
  <p class="muted" style="font-size:.9rem">Podes mudar tudo mais tarde no separador «Eu».</p></div>`}
@@ -903,6 +906,7 @@ function tick(){const left=Math.max(0,Math.ceil((T.end-Date.now())/1000));$('#t-
  if(left<=0&&T.id){clearInterval(T.id);T.id=null;$('#timer').classList.add('over');$('#t-label').textContent='Próxima série!';beep()}}
 
 document.title=APPNAME;$('#appname').textContent=APPNAME;
+if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hidden=false;document.querySelector('.brand small').textContent='Treino e alimentação à tua medida'}
 render();
 function autoWatch(){if(NATIVE&&S.hc.on&&todayCode()&&!S.watch[TODAY])syncWatch(TODAY,true)}
 autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
