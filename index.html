@@ -104,6 +104,8 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .ex-idx{font-family:var(--display);font-weight:800;font-size:1.6rem;color:var(--line);line-height:1}
 .hist{font-size:.9rem;color:var(--muted)}
 .up{color:var(--ok);font-weight:700}
+.coach{margin-top:10px;padding:10px 12px;border-radius:12px;background:var(--soft);font-size:.92rem;line-height:1.4}
+.coach small{color:var(--muted);font-size:.85rem}
 details{border-top:1px dashed var(--line);padding-top:8px}
 summary{cursor:pointer;font-weight:600;font-size:.95rem;list-style:none;display:flex;align-items:center;gap:6px}
 summary::-webkit-details-marker{display:none}
@@ -580,6 +582,31 @@ function cycleWeek(){const days=Math.max(0,Math.floor((Date.parse(TODAY)-Date.pa
 function lastLog(id){const a=S.logs[id];return a&&a.length?a[a.length-1]:null}
 function sugg(ex){const l=lastLog(ex.id);if(!l)return null;const kgs=l.sets.map(s=>s.kg).filter(x=>x>0);const top=kgs.length?Math.max(...kgs):0;
  const hit=l.sets.length>=ex.sets&&l.sets.every(s=>s.r>=ex.reps[1]);return{l,top,hit,next:hit&&top?top+ex.inc:top}}
+/* treinador: sugere o peso de cada série — no início pelo último treino, depois pela série anterior de hoje */
+const rnd=(x,inc)=>{const st=inc<=1.25?0.5:1;return Math.max(st,Math.round(x/st)*st)};
+function coachStart(ex,g,deload){
+ if(!g||!g.top)return null;const lo=ex.reps[0],hi=ex.reps[1],rs=g.l.sets.map(x=>x.r);
+ if(deload)return{kg:half(g.top*0.9),why:'semana leve: 10% abaixo do habitual'};
+ if(g.hit)return{kg:g.top+ex.inc,why:`da última vez chegaste às ${hi} reps em todas as séries`};
+ const avg=rs.reduce((a,b)=>a+b,0)/rs.length;
+ if(avg<lo-2)return{kg:rnd(g.top*0.9,ex.inc),why:`da última vez ficaste longe das ${lo} reps`};
+ if(avg<lo)return{kg:Math.max(ex.inc,g.top-ex.inc),why:`da última vez ficaste abaixo das ${lo} reps`};
+ return{kg:g.top,why:`mantém e tenta chegar às ${hi} reps em todas`};
+}
+function coachNext(ex,prev){
+ const lo=ex.reps[0],hi=ex.reps[1],kg=prev.kg,r=prev.r;
+ if(r>=hi+3)return{kg:kg+2*ex.inc,why:`fizeste ${r} reps com ${fmt(kg)} kg — estava muito leve`};
+ if(r>hi)return{kg:kg+ex.inc,why:`fizeste ${r} reps com ${fmt(kg)} kg — passaste das ${hi}`};
+ if(r>=lo)return{kg,why:`fizeste ${r} reps com ${fmt(kg)} kg — dentro do alvo, mantém`};
+ if(r>=lo-2)return{kg:Math.max(ex.inc,kg-ex.inc),why:`fizeste ${r} reps com ${fmt(kg)} kg — abaixo das ${lo}`};
+ return{kg:rnd(kg*0.85,ex.inc),why:`fizeste ${r} reps com ${fmt(kg)} kg — muito abaixo das ${lo}`};
+}
+function coachPlan(ex,g,deload,n,vals){
+ const out=[];let cur=coachStart(ex,g,deload);
+ for(let k=0;k<n;k++){out.push(cur);const v=vals[k]||{};
+  if(v.done&&v.kg>0&&v.r>0)cur=coachNext(ex,v);}
+ return out;
+}
 function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){d=S.drafts[code]={date:TODAY,v:{}}}return d}
 const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
@@ -635,19 +662,25 @@ const GROUPS={
 };
 function exCard(ex,i,wk,deload,d){
  const g=sugg(ex),n=deload?Math.ceil(ex.sets/2):ex.sets+(ex.iso&&wk>=3?1:0);
- const pre=g&&g.top?(deload?half(g.top*0.9):g.next):null;
  const vals=d.v[ex.id]||[];
+ const plan=coachPlan(ex,g,deload,n,vals);
  let rows='';
- for(let k=0;k<n;k++){const v=vals[k]||{};
+ for(let k=0;k<n;k++){const v=vals[k]||{};const pre=plan[k]?plan[k].kg:null;
   rows+=`<div class="set ${v.done?'done':''}"><span class="set-n">${k+1}</span>
   <label class="fld"><input id="kg-${ex.id}-${k}" data-ex="${ex.id}" data-k="${k}" data-f="kg" inputmode="decimal" autocomplete="off" placeholder="${pre?fmt(pre):'—'}" value="${v.kg!=null?fmt(v.kg):''}" aria-label="Peso série ${k+1}"><span>kg</span></label>
   <label class="fld"><input id="r-${ex.id}-${k}" data-ex="${ex.id}" data-k="${k}" data-f="r" inputmode="numeric" autocomplete="off" placeholder="${ex.reps[0]}–${ex.reps[1]}" value="${v.r!=null?v.r:''}" aria-label="Repetições série ${k+1}"><span>reps</span></label>
   <button class="chk" data-act="done" data-ex="${ex.id}" data-k="${k}" data-rest="${ex.rest}" aria-label="Série ${k+1} feita">✓</button></div>`}
  let hist='<p class="hist">Primeira vez: escolhe um peso em que acabas com 2–3 repetições de reserva.</p>';
  if(g){hist=`<p class="hist">Última vez com esta variante (${dshort(g.l.d)}): ${g.top?fmt(g.top)+' kg × ':''}${g.l.sets.map(x=>x.r).join(', ')}${g.top?'':' reps'}`+
-   (g.hit&&!deload&&g.top?` · <span class="up">sobe para ${fmt(g.next)} kg</span>`:'')+'</p>'}
+'</p>'}
+ const nk=[...Array(n).keys()].find(k=>!(vals[k]&&vals[k].done));
+ let tip='';
+ if(nk!==undefined&&plan[nk]){const c=plan[nk];tip=`<p class="coach"><b>Treinador · série ${nk+1}:</b> <span class="up">${fmt(c.kg)} kg</span> × ${ex.reps[0]}–${ex.reps[1]}<br><small>${c.why}.</small></p>`}
+ else if(nk!==undefined&&nk>0){tip=`<p class="coach"><b>Treinador:</b> escreve os kg da série anterior para eu sugerir a próxima.</p>`}
+ else if(nk===undefined&&n>0&&plan[n-1]){const lv=vals[n-1]||{};const nx=lv.kg>0&&lv.r>0?coachNext(ex,lv):null;
+  if(nx&&nx.kg>lv.kg)tip=`<p class="coach"><b>Treinador:</b> estava leve — da próxima vez começa com <span class="up">${fmt(nx.kg)} kg</span>.</p>`}
  return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR').replace(' rep em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.core?'Core':ex.iso?'Isolado':'Composto'} · versão ${ex.vi+1} de ${ex.nv} · muda para a semana</p></div><span class="ex-idx">${pad(i+1)}</span></div>
- ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>
+ ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>${tip}
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
 }
 function vHoje(){
