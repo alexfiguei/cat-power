@@ -618,7 +618,9 @@ function vid(ex){return `<a class="vid" href="https://www.youtube.com/results?se
 const CAP=window.Capacitor;const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
 const HP=NATIVE?((CAP.Plugins&&CAP.Plugins.HealthPlugin)||(CAP.registerPlugin&&CAP.registerPlugin('HealthPlugin'))):null;
 const H_PERMS=['READ_WORKOUTS','READ_HEART_RATE','READ_TOTAL_CALORIES','READ_ACTIVE_CALORIES'];
-let HC_BUSY=false;
+let HC_BUSY=false,HC_READY=null;
+/* o plugin só cria a ligação ao Health Connect em isHealthAvailable: tem de correr sempre que a app abre */
+function hcReady(){if(!HC_READY)HC_READY=HP.isHealthAvailable().then(a=>{if(!a||!a.available){HC_READY=null;throw new Error('Health Connect indisponível')}return true}).catch(e=>{HC_READY=null;throw e});return HC_READY}
 function granted(r){const p=r&&r.permissions;if(!p)return {};if(Array.isArray(p)){const m={};p.forEach(o=>Object.assign(m,o));return m}return typeof p==='object'?p:{}}
 async function hcConnect(){
  if(!HP){toast('Disponível só na app Android');return}
@@ -632,6 +634,7 @@ async function hcConnect(){
  }catch(e){toast('Não foi possível ligar: '+(e&&e.message?e.message:'erro'))}
 }
 async function fetchWatch(d){
+ await hcReady();
  const start=new Date(d+'T00:00:00'),end=new Date(start.getTime()+864e5);
  const res=await HP.queryWorkouts({startDate:start.toISOString(),endDate:end.toISOString(),includeHeartRate:true,includeRoute:false,includeSteps:false});
  const ws=(res&&res.workouts)||[];if(!ws.length)return null;
