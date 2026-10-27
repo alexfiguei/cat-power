@@ -545,7 +545,7 @@ const KEY=FLAV==='mary'?'massa47_mary_v1':'massa47_v1';
 function defProfile(){return FLAV==='mary'?{sex:'f',age:null,h:164,w:65,act:1.55,goal:null}:{sex:'m',age:47,h:184,w:86,act:1.55,goal:'ganhar'}}
 function defState(){const p=defProfile();return{profile:p,setup:FLAV!=='mary',adj:0,start:TODAY,logs:{},weights:[{d:TODAY,kg:p.w}],drafts:{},sessions:[],hc:{on:false},watch:{},history:[],histV:0}}
 function load(){try{let r=localStorage.getItem(KEY);if(!r&&FLAV==='mary')r=localStorage.getItem('massa47_v1');if(r)return Object.assign(defState(),JSON.parse(r))}catch(e){}return defState()}
-function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+function save(next=S){try{localStorage.setItem(KEY,JSON.stringify(next));S=next;return true}catch(e){toast('Não foi possível guardar. O treino continua disponível; tenta novamente.');return false}}
 let S=load();
 S.profile=Object.assign(defProfile(),S.profile);
 
@@ -563,7 +563,7 @@ if(S.histV!==1){
  S.history.sort((a,b)=>a.d<b.d?-1:1);S.histV=1;save();
 }
 function bodyKg(d){const w=S.weights.filter(x=>x.d<=d).sort((a,b)=>a.d<b.d?-1:1);return w.length?w[w.length-1].kg:S.profile.w}
-function hStats(h){const w=S.watch[h.d];
+function hStats(h){const w=h.watch||(S.watch[h.d]&&!S.watch[h.d].id?S.watch[h.d]:null);
  const wDur=w&&w.dur>0,dur=wDur?w.dur:(h.dur||Math.max(20,Math.round(h.sets*2.5))),durEst=!wDur&&!h.dur;
  const wK=w&&w.kcal!=null,kcal=wK?w.kcal:Math.round(MET*bodyKg(h.d)*dur/60);
  return{dur,durEst,kcal,kEst:!wK,hrAvg:w?w.hrAvg:null,hrMax:w?w.hrMax:null,watch:!!w}}
@@ -575,8 +575,26 @@ const after=c=>ORDER[(ORDER.indexOf(c)+1)%ORDER.length];
 function todayCode(){const t=S.sessions.find(x=>x.d===TODAY);return t?t.code:null}
 function suggested(){const prev=S.sessions.filter(x=>x.d<TODAY);return prev.length?after(prev[prev.length-1].code):ORDER[0]}
 function nextCode(){return after(todayCode()||ui.code)}
-function setToday(c){S.sessions=S.sessions.filter(x=>x.d!==TODAY);S.sessions.push({d:TODAY,code:c});S.sessions.sort((a,b)=>a.d<b.d?-1:1);save()}
-const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null};ui.code=todayCode()||suggested();
+const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false};ui.code=todayCode()||Object.keys(S.drafts).find(c=>S.drafts[c].date===TODAY)||suggested();
+function savedToday(code){return S.history.find(h=>h.d===TODAY&&h.code===code&&h.source!=='watch')}
+function saveWorkout(code){
+ const d=S.drafts[code];if(!d||d.date!==TODAY){toast(savedToday(code)?'Treino já guardado com sucesso.':'Ainda não registaste nenhuma série');return false}
+ const next=JSON.parse(JSON.stringify(S)),exs=[],prs=[];
+ exList(code).forEach(ex=>{const sets=(d.v[ex.id]||[]).filter(s=>s&&s.r>0).map(s=>({kg:s.kg||0,r:s.r}));
+  if(!sets.length)return;
+  let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
+  const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
+  exs.push({id:ex.id,sets});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
+ });
+ if(!exs.length){toast('Ainda não registaste nenhuma série');return false}
+ const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;if(old&&old.watch)rec.watch=old.watch;
+ next.history=next.history.filter(h=>!(h.d===TODAY&&h.code===code));next.history.push(rec);
+ next.sessions=next.sessions.filter(x=>x.d!==TODAY);next.sessions.push({d:TODAY,code});next.sessions.sort((a,b)=>a.d<b.d?-1:1);
+ const watches=next.history.filter(h=>h.d===TODAY&&h.watch).map(h=>h.watch);if(next.watch[TODAY]&&next.watch[TODAY].id)watches.push(next.watch[TODAY]);
+ mergeWatchRecords(next,TODAY,watches);delete next.drafts[code];
+ if(!save(next))return false;
+ ui.editing=false;clearInterval(T.id);T.id=null;$('#timer').hidden=true;render();window.scrollTo(0,0);toast('Treino guardado com sucesso ✓');return true;
+}
 
 function goal(){return GOALS[S.profile.goal]||GOALS.ganhar}
 function targets(){const p=S.profile,G=goal(),age=p.age||30;const bmr=10*p.w+6.25*p.h-5*age+(p.sex==='f'?-161:5);const tdee=bmr*p.act;
@@ -634,27 +652,44 @@ async function hcConnect(){
   const g=granted(await HP.requestHealthPermissions({permissions:H_PERMS}));
   S.hc.on=!!g.READ_WORKOUTS;S.hc.hr=!!g.READ_HEART_RATE;save();render();
   toast(S.hc.on?'Relógio ligado':'Sem autorização para ler os treinos');
-  if(S.hc.on&&todayCode())syncWatch(TODAY,true);
+  if(S.hc.on)syncWatch(TODAY,true);
  }catch(e){toast('Não foi possível ligar: '+(e&&e.message?e.message:'erro'))}
 }
 async function fetchWatch(d){
  await hcReady();
- const start=new Date(d+'T00:00:00'),end=new Date(start.getTime()+864e5);
- const res=await HP.queryWorkouts({startDate:start.toISOString(),endDate:end.toISOString(),includeHeartRate:true,includeRoute:false,includeSteps:false});
- const ws=(res&&res.workouts)||[];if(!ws.length)return null;
- const pref=ws.filter(w=>/STRENGTH|WEIGHT|CALISTHENICS|CIRCUIT|OTHER/.test(w.workoutType||''));
- const pool=pref.length?pref:ws;const w=pool.reduce((a,b)=>(b.duration||0)>(a.duration||0)?b:a);
- const hr=(w.heartRate||[]).map(x=>x.bpm).filter(x=>x>0);
- return{start:w.startDate,dur:Math.round((w.duration||0)/60),kcal:w.calories!=null?Math.round(w.calories):null,
-  hrAvg:hr.length?Math.round(hr.reduce((a,b)=>a+b,0)/hr.length):null,hrMax:hr.length?Math.round(Math.max(...hr)):null,type:w.workoutType||''}
+ const start=new Date(d+'T00:00:00'),end=new Date(start);end.setDate(end.getDate()+1);
+ const res=await HP.queryWorkouts({startDate:start.toISOString(),endDate:end.toISOString(),includeHeartRate:!!S.hc.hr,includeRoute:false,includeSteps:false});
+ return ((res&&res.workouts)||[]).map(w=>{
+  const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate);if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<=t0||t1>Date.now()||iso(new Date(t0))!==d)return null;
+  const hr=(w.heartRate||[]).map(x=>x.bpm).filter(x=>Number.isFinite(x)&&x>0);
+  return{id:String(w.sourceBundleId||'health-connect')+':'+String(w.id||[w.startDate,w.endDate,w.workoutType].join('|')),start:w.startDate,end:w.endDate,
+   dur:Math.max(1,Math.round((w.duration>0?w.duration:(t1-t0)/1000)/60)),kcal:Number.isFinite(w.calories)&&w.calories>=0?Math.round(w.calories):null,
+   hrAvg:hr.length?Math.round(hr.reduce((a,b)=>a+b,0)/hr.length):null,hrMax:hr.length?Math.max(...hr):null,type:w.workoutType||'',source:w.sourceBundleId||''};
+ }).filter(Boolean).sort((a,b)=>a.start.localeCompare(b.start));
+}
+const strengthWatch=w=>/STRENGTH|WEIGHT|CALISTHENICS|CIRCUIT/.test(w.type||'');
+function mergeWatchRecords(next,d,workouts){
+ let imported=0,linked=0;const seen=new Set();
+ workouts.forEach(w=>{if(!w.id||seen.has(w.id))return;seen.add(w.id);
+  const existing=next.history.find(h=>h.watch&&h.watch.id===w.id),t0=Date.parse(w.start),t1=Date.parse(w.end);
+  const matches=strengthWatch(w)?next.history.filter(h=>h.d===d&&h.source!=='watch'&&h.t0&&h.t1&&(!h.watch||h.watch.id===w.id)).map(h=>({h,overlap:Math.min(h.t1,t1)-Math.max(h.t0,t0)})).filter(x=>x.overlap>0).sort((a,b)=>b.overlap-a.overlap):[];
+  const target=existing&&existing.source!=='watch'?existing:matches[0]?.h;
+  if(target){target.watch=w;if(existing&&existing!==target)next.history=next.history.filter(h=>h!==existing);linked++;}
+  else if(existing){existing.watch=w;existing.t0=t0;existing.t1=t1;existing.dur=w.dur;}
+  else{const rec=mkHist(d,null,[],t0,t1);Object.assign(rec,{source:'watch',watch:w,dur:w.dur});next.history.push(rec);imported++;}
+ });
+ if(workouts.length){const pref=workouts.filter(strengthWatch);next.watch[d]=(pref.length?pref:workouts).slice(-1)[0];}
+ return{imported,linked};
 }
 async function syncWatch(d,quiet){
- if(!HP||!S.hc.on||HC_BUSY)return;HC_BUSY=true;
- try{const w=await fetchWatch(d);
-  if(w){S.watch[d]=w;save();render();toast(`Relógio: ${w.dur} min${w.kcal!=null?' · '+w.kcal+' kcal':''}${w.hrAvg?' · FC '+w.hrAvg:''}`)}
-  else if(!quiet)toast('Ainda não há treino do relógio hoje. Termina-o no relógio e tenta outra vez.');
+ if(!HP){if(!quiet)toast('A ligação ao relógio funciona na app Android');return}
+ if(!S.hc.on){if(!quiet)hcConnect();return}
+ if(HC_BUSY){if(!quiet)toast('A atualizar o registo do relógio…');return}HC_BUSY=true;
+ try{const workouts=await fetchWatch(d);
+  if(workouts.length){const next=JSON.parse(JSON.stringify(S)),r=mergeWatchRecords(next,d,workouts);if(!save(next))return;render();if(!quiet)toast(r.imported?`${r.imported} treino${r.imported>1?'s':''} do relógio guardado${r.imported>1?'s':''} no Histórico ✓`:'Registo do relógio atualizado com sucesso ✓');}
+  else if(!quiet)toast('Ainda não há registo no Health Connect. Termina o treino no relógio e sincroniza o Samsung Health.');
  }catch(e){if(!quiet)toast('Erro a ler o relógio: '+(e&&e.message?e.message:'erro'))}
- HC_BUSY=false;
+ finally{HC_BUSY=false}
 }
 function watchCard(d){const w=S.watch[d];
  if(!w)return `<p class="muted" style="font-size:.92rem;margin-top:6px">Termina o treino no relógio (Exercício → Musculação) e toca em Atualizar.</p>`;
@@ -708,8 +743,16 @@ function exCard(ex,i,wk,deload,d){
  ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>${tip}
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
 }
+function savedWorkoutCard(h){const st=hStats(h);
+ return `<section class="card stack" role="status"><p><span class="pill ok">✓ Concluído</span></p><h1>Treino guardado com sucesso</h1><p>Treino ${h.code} · ${dshort(h.d)}${h.t1?' · '+hhmm(h.t1):''}</p>
+ <div class="watch num"><div><b>${h.sets}</b><small>séries guardadas</small></div><div><b>${h.reps}</b><small>repetições</small></div><div><b>${st.dur}</b><small>min${st.durEst?' ≈':''}</small></div><div><b>${st.kcal}</b><small>kcal${st.kEst?' ≈':''}</small></div></div>
+ ${h.ex.map(e=>`<div><h3>${EXN[e.id]||e.id}</h3>${e.sets.map((s,k)=>`<div class="exrow num"><span>✓ Série ${k+1}</span><span>${fmt(s.kg||0)} kg × ${s.r} reps</span></div>`).join('')}</div>`).join('')}
+ <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
+}
+function todayWatchCard(){return NATIVE&&S.hc.on?`<div class="card"><div class="ex-head"><h3>Relógio · hoje</h3><button class="btn ghost sm" data-act="watch">Atualizar relógio</button></div>${watchCard(TODAY)}</div>`:''}
 function vHoje(){
  const wk=cycleWeek(),deload=wk===5,code=ui.code,nx=nextCode();
+ const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${savedWorkoutCard(saved)}${todayWatchCard()}<div class="nextline"><span>Próximo treino</span><b>${nx} · ${SESS[nx].name}</b></div></div>`;
  const done=S.sessions.filter(x=>x.d<TODAY||x.d===TODAY).length,last7=S.sessions.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=S.sessions[S.sessions.length-1];
  let h=`<div class="stack">
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
@@ -729,7 +772,7 @@ function vHoje(){
  }else{let ph=0;
   exL.forEach((ex,i)=>{const f=ex.core?4:ex.iso?3:2;if(f!==ph){ph=f;h+=`<div><p class="eyebrow">Fase ${f===4?(code==='B'||code==='D'?4:3):f} · ${f===2?'Compostos pesados':f===3?'Isolamento':'Core'}</p><p class="muted" style="font-size:.9rem">${f===2?'Os exercícios mais pesados, com o músculo fresco. É aqui que se progride mais.':f===3?'Trabalho dirigido a cada músculo, já pré-cansado pelos compostos.':'Estabilidade do tronco, no fim para não cansar antes dos pesados.'}</p></div>`}h+=exCard(ex,i,wk,deload,d)});
  }
- if(NATIVE&&S.hc.on)h+=`<div class="card"><div class="ex-head"><h3>Relógio · hoje</h3><button class="btn ghost sm" data-act="watch">Atualizar</button></div>${watchCard(TODAY)}</div>`;
+ h+=todayWatchCard();
  h+=`<button class="btn" data-act="save" data-code="${code}">Guardar treino</button>
  ${d.t0?`<p class="muted num" style="font-size:.9rem">Começaste às ${hhmm(d.t0)}. O tempo e as calorias ficam no Histórico quando guardares.</p>`:''}
  <p class="muted" style="font-size:.9rem">Toca em ✓ no fim de cada série para arrancar o descanso. O que guardares aparece na próxima sessão e a app diz-te quando subir o peso.</p></div>`;
@@ -758,12 +801,13 @@ function vHist(){
  if(R.length)h+=`<div class="card"><h3>Recordes pessoais</h3><div style="margin-top:6px">${R.map(r=>`<div class="exrow num"><span>${EXN[r.id]}</span><span>${fmt(r.kg)} kg × ${r.r} <span class="est">${dshort(r.d)}</span></span></div>`).join('')}</div></div>`;
  h+=`<p class="eyebrow">Treinos guardados</p>`;
  H.forEach(x=>{const s=SESS[x.code],st=hStats(x),wd=DAYS_FULL[new Date(x.d+'T12:00:00').getDay()];
-  h+=`<article class="card"><div class="hhead"><span class="dot p-${s?s.cls:'none'}"></span><h3>${x.code} · ${s?s.name:''}</h3><time>${wd}, ${dshort(x.d)}${x.t0?' · '+hhmm(x.t0):''}</time></div>
-  <div class="watch num"><div><b>${st.dur}</b><small>min${st.durEst?' ≈':''}</small></div><div><b>${st.kcal}</b><small>kcal${st.kEst?' ≈':''}</small></div><div><b>${x.sets}</b><small>séries</small></div><div><b>${fmt(Math.round(x.vol/100)/10)}</b><small>t total</small></div></div>
+  h+=`<article class="card"><div class="hhead"><span class="dot p-${s?s.cls:'none'}"></span><h3>${x.source==='watch'?'Treino do relógio':x.code+' · '+(s?s.name:'')}</h3><time>${wd}, ${dshort(x.d)}${x.t0?' · '+hhmm(x.t0):''}</time></div>
+  <div class="watch num"><div><b>${st.dur}</b><small>min${st.durEst?' ≈':''}</small></div><div><b>${st.kcal}</b><small>kcal${st.kEst?' ≈':''}</small></div><div><b>${x.source==='watch'?'—':x.sets}</b><small>séries</small></div><div><b>${x.source==='watch'?'—':fmt(Math.round(x.vol/100)/10)}</b><small>t total</small></div></div>
+  ${x.watch?'<p class="muted" style="font-size:.9rem;margin-top:6px">✓ Registo importado do relógio</p>':''}
   ${st.hrAvg?`<p class="muted num" style="font-size:.9rem;margin-top:6px">Frequência cardíaca: média ${st.hrAvg}${st.hrMax?' · máxima '+st.hrMax:''} bpm</p>`:''}
   ${x.prs&&x.prs.length?`<div class="prs">${x.prs.map(p=>`<span class="pill ok">Recorde · ${EXN[p.id]}: ${fmt(p.kg)} kg</span>`).join('')}</div>`:''}
-  <details style="margin-top:10px"><summary>Exercícios (${x.ex.length})</summary><div style="margin-top:6px">${x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
-  <button class="del" data-act="hdel" data-d="${x.d}" data-c="${x.code}">Apagar este treino</button></details></article>`});
+  <details style="margin-top:10px"><summary>${x.source==='watch'?'Dados do registo':'Exercícios ('+x.ex.length+')'}</summary><div style="margin-top:6px">${x.source==='watch'?'<p class="muted">Séries e cargas não foram registadas na app.</p>':x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
+  <button class="del" data-act="hdel" data-d="${x.d}" data-c="${x.code}" ${x.source==='watch'?'data-watch="'+encodeURIComponent(x.watch.id)+'"':''}>Apagar este treino</button></details></article>`});
  return h+`<p class="muted" style="font-size:.85rem">≈ estimativa: sem dados do relógio, o tempo vem da hora da 1.ª série até guardares e as calorias são calculadas pelo teu peso e pelo tempo.</p></div>`;
 }
 
@@ -854,12 +898,12 @@ function vWatchEu(){
  let h=`<div class="card stack"><h3>Relógio Samsung</h3>`;
  if(!NATIVE)h+=`<p class="muted" style="font-size:.92rem">A ligação ao Galaxy Watch e ao Samsung Health funciona na app Android da Cat Power.</p>`;
  else{
-  h+=S.hc.on?`<p><span class="pill ok">Ligado</span> No fim de cada treino a app lê a duração, a frequência cardíaca e as calorias do relógio.</p><button class="btn ghost sm" data-act="hc">Rever autorizações</button>`
+  h+=S.hc.on?`<p><span class="pill ok">Ligado</span> Atualiza para importar o registo do relógio para o Histórico, com duração, frequência cardíaca e calorias disponíveis.</p><button class="btn sm" data-act="watch">Atualizar relógio</button><button class="btn ghost sm" data-act="hc">Rever autorizações</button>`
    :`<p>Liga a app ao Samsung Health para juntar os dados do relógio a cada treino.</p><button class="btn sm" data-act="hc">Ligar ao Samsung Health</button>
      <p class="muted" style="font-size:.88rem">No Samsung Health ativa a partilha com o Health Connect: Samsung Health → ⋮ → Definições → Health Connect.</p>`;
  }
- const rows=[...S.sessions].reverse().slice(0,10).map(x=>{const w=S.watch[x.d],s=SESS[x.code];
-  return `<div class="hist-row num"><b>${dshort(x.d)}</b><span class="dot p-${s?s.cls:'none'}" title="${x.code}"></span><span>Treino ${x.code}${w?` · ${w.dur} min${w.hrAvg?' · FC '+w.hrAvg:''}${w.kcal!=null?' · '+w.kcal+' kcal':''}`:''}</span></div>`}).join('');
+ const rows=[...S.history].sort((a,b)=>(b.t1||Date.parse(b.d))-(a.t1||Date.parse(a.d))).slice(0,10).map(x=>{const w=x.watch||(S.watch[x.d]&&!S.watch[x.d].id?S.watch[x.d]:null),s=SESS[x.code];
+  return `<div class="hist-row num"><b>${dshort(x.d)}</b><span class="dot p-${s?s.cls:'none'}"></span><span>${x.source==='watch'?'Relógio':'Treino '+x.code}${w?` · ${w.dur} min${w.hrAvg?' · FC '+w.hrAvg:''}${w.kcal!=null?' · '+w.kcal+' kcal':''}`:''}</span></div>`}).join('');
  h+=rows?`<div><p class="eyebrow" style="margin-bottom:4px">Últimos treinos</p>${rows}</div>`:'';
  return h+'</div>'}
 function profForm(p){return `<div class="form">
@@ -923,29 +967,18 @@ function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{con
 document.addEventListener('click',e=>{
  const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
- if(a==='code'){ui.code=b.dataset.c;setToday(ui.code);render();toast(`Hoje: treino ${ui.code} · próximo: ${nextCode()}`)}
+ if(a==='code'){ui.code=b.dataset.c;ui.editing=false;render();toast(`Hoje: treino ${ui.code} · próximo: ${nextCode()}`)}
+ else if(a==='history'){ui.tab='historico';render();window.scrollTo(0,0)}
+ else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;S.drafts[h.code]={date:TODAY,t0:h.t0,v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
  else if(a==='done'){
-  const code=ui.code;if(todayCode()!==code)setToday(code);const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
+  const code=ui.code;const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
   if(v.done){v.done=false;save();render();return}
   const kgIn=document.getElementById(`kg-${id}-${k}`),rIn=document.getElementById(`r-${id}-${k}`);
   if(v.kg==null&&kgIn.placeholder!=='—')v.kg=num(kgIn.placeholder);
   if(v.r==null||isNaN(v.r)){toast('Escreve as repetições que fizeste');rIn.focus();return}
   v.done=true;save();render();startTimer(+b.dataset.rest);
  }
- else if(a==='save'){
-  const code=b.dataset.code,d=draft(code);let n=0;const exs=[],prs=[];
-  exList(code).forEach(ex=>{const sets=(d.v[ex.id]||[]).filter(s=>s&&s.r>0).map(s=>({kg:s.kg||0,r:s.r}));
-   if(sets.length){
-    let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
-    const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
-    exs.push({id:ex.id,sets});
-    const l=S.logs[ex.id]=S.logs[ex.id]||[];if(l.length&&l[l.length-1].d===TODAY)l.pop();l.push({d:TODAY,sets});if(l.length>30)l.shift();n++}});
-  if(!n){toast('Ainda não registaste nenhuma série');return}
-  const old=S.history.find(h=>h.d===TODAY&&h.code===code);
-  const rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;
-  S.history=S.history.filter(h=>!(h.d===TODAY&&h.code===code));S.history.push(rec);if(S.history.length>1000)S.history.shift();
-  delete S.drafts[code];setToday(code);render();toast(prs.length?`Guardado · ${prs.length} recorde${prs.length>1?'s':''} novo${prs.length>1?'s':''}!`:`Treino ${code} guardado · próximo: ${nextCode()}`);window.scrollTo(0,0);if(NATIVE&&S.hc.on)setTimeout(()=>syncWatch(TODAY,false),1500);
- }
+ else if(a==='save'){if(saveWorkout(b.dataset.code)&&NATIVE&&S.hc.on)setTimeout(()=>syncWatch(TODAY,true),1500)}
  else if(a==='setup'){const p=S.profile,age=num($('#p-age').value),w=num($('#p-w').value);let h=num($('#p-h').value);if(h&&h<3)h=Math.round(h*100);
   if(!age||age<12||age>100){toast('Escreve a tua idade');$('#p-age').focus();return}
   if(!h||h<120||h>230){toast('Escreve a altura em cm, por exemplo 164');$('#p-h').focus();return}
@@ -953,7 +986,7 @@ document.addEventListener('click',e=>{
   if(!$('#p-goal').value){toast('Escolhe o teu objetivo');$('#p-goal').focus();return}
   Object.assign(p,{age:Math.round(age),h:Math.round(h),w,sex:$('#p-sex').value,goal:$('#p-goal').value,act:parseFloat($('#p-act').value)});
   S.weights=[{d:TODAY,kg:w}];S.start=TODAY;S.setup=true;save();ui.tab='hoje';render();window.scrollTo(0,0);toast('Tudo pronto. Bom treino!')}
- else if(a==='hdel'){const dd=b.dataset.d,cc=b.dataset.c;if(!confirm(`Apagar o treino ${cc} de ${dshort(dd)}?`))return;
+ else if(a==='hdel'){const dd=b.dataset.d,cc=b.dataset.c;if(b.dataset.watch){const id=decodeURIComponent(b.dataset.watch);if(!confirm(`Apagar o registo do relógio de ${dshort(dd)}?`))return;S.history=S.history.filter(h=>!(h.source==='watch'&&h.watch.id===id));save();render();toast('Registo apagado');return}if(!confirm(`Apagar o treino ${cc} de ${dshort(dd)}?`))return;
   S.history=S.history.filter(h=>!(h.d===dd&&h.code===cc));S.sessions=S.sessions.filter(x=>!(x.d===dd&&x.code===cc));
   allVar(cc).forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
  else if(a==='weigh'){const v=num($('#w-in').value);if(!v||v<30||v>250){toast('Escreve o peso em kg, por exemplo 86,4');return}
@@ -982,7 +1015,7 @@ function tick(){const left=Math.max(0,Math.ceil((T.end-Date.now())/1000));$('#t-
 document.title=APPNAME;$('#appname').textContent=APPNAME;
 if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hidden=false;document.querySelector('.brand small').textContent='Treino e alimentação à tua medida'}
 render();
-function autoWatch(){if(NATIVE&&S.hc.on&&todayCode()&&!S.watch[TODAY])syncWatch(TODAY,true)}
+function autoWatch(){if(NATIVE&&S.hc.on)syncWatch(TODAY,true)}
 autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
 </script>
 

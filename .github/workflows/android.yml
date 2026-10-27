@@ -32,7 +32,7 @@ jobs:
         run: npm ci
 
       - name: Copiar a app web para o Android
-        run: npm run build && npx cap sync android
+        run: npm test && npm run build && npx cap sync android
 
       - name: Chave de assinatura
         env:

@@ -4,7 +4,8 @@
   "private": true,
   "description": "Cat Power - app de treino para ganho de massa muscular",
   "scripts": {
-    "build": "node scripts/build-www.js"
+    "build": "node scripts/build-www.js",
+    "test": "node scripts/test-workout-state.js"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
