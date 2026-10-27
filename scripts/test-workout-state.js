@@ -148,6 +148,12 @@ function workout(id = 'strength', overrides = {}) {
   month.control.records[0].title = '<img src=x onerror=alert(1)>';
   await month.read('syncWatch(TODAY,false)');
   assert.doesNotMatch(month.read('vHist()'), /<img src=x/);
+  month.read("S.history.find(h=>h.d===TODAY).imageExerciseIds=['remada_peito']");
+  seedDraft(month); month.read("saveWorkout('A')");
+  assert.equal(month.read('S.history.length'), 3);
+  assert.equal(month.read('savedToday("A").imageExerciseIds[0]'), 'remada_peito');
+  month.click('edit-saved', { code: 'A' }); month.read("saveWorkout('A')");
+  assert.equal(month.read('savedToday("A").imageExerciseIds[0]'), 'remada_peito');
   for (const id of JSON.parse(month.read('JSON.stringify(Object.keys(EXN))'))) {
     for (const position of [0, 1]) assert(fs.existsSync(`img/${id}_${position}.jpg`), `Exercise image missing: ${id}_${position}`);
   }

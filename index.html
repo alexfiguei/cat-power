@@ -587,7 +587,7 @@ function saveWorkout(code){
   exs.push({id:ex.id,sets});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
  });
  if(!exs.length){toast('Ainda não registaste nenhuma série');return false}
- const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;if(old&&old.watch)rec.watch=old.watch;
+ const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;if(old&&old.watch)rec.watch=old.watch;if(old&&old.imageExerciseIds)rec.imageExerciseIds=[...old.imageExerciseIds];
  next.history=next.history.filter(h=>!(h.d===TODAY&&h.code===code));next.history.push(rec);
  next.sessions=next.sessions.filter(x=>x.d!==TODAY);next.sessions.push({d:TODAY,code});next.sessions.sort((a,b)=>a.d<b.d?-1:1);
  const watches=next.history.filter(h=>h.d===TODAY&&h.watch).map(h=>h.watch);if(next.watch[TODAY]&&next.watch[TODAY].id)watches.push(next.watch[TODAY]);
@@ -674,7 +674,7 @@ function mergeWatchRecords(next,d,workouts){
   const existing=next.history.find(h=>h.watch&&h.watch.id===w.id),t0=Date.parse(w.start),t1=Date.parse(w.end);
   const matches=strengthWatch(w)?next.history.filter(h=>h.d===d&&h.source!=='watch'&&h.t0&&h.t1&&(!h.watch||h.watch.id===w.id)).map(h=>({h,overlap:Math.min(h.t1,t1)-Math.max(h.t0,t0)})).filter(x=>x.overlap>0).sort((a,b)=>b.overlap-a.overlap):[];
   const target=existing&&existing.source!=='watch'?existing:matches[0]?.h;
-  if(target){target.watch=w;if(existing&&existing!==target)next.history=next.history.filter(h=>h!==existing);linked++;}
+  if(target){target.watch=w;if(existing&&existing!==target){target.imageExerciseIds=[...new Set([...(target.imageExerciseIds||[]),...(existing.imageExerciseIds||[])])];next.history=next.history.filter(h=>h!==existing);}linked++;}
   else if(existing){existing.watch=w;existing.t0=t0;existing.t1=t1;existing.dur=w.dur;}
   else{const rec=mkHist(d,null,[],t0,t1);Object.assign(rec,{source:'watch',watch:w,dur:w.dur});next.history.push(rec);imported++;}
  });
