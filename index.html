@@ -818,7 +818,7 @@ function exCard(ex,i,wk,deload,d){
 function savedWorkoutCard(h){const st=hStats(h);
  return `<section class="card stack" role="status"><p><span class="pill ok">✓ Concluído</span></p><h1>Treino guardado com sucesso</h1><p>Treino ${h.code} · ${dshort(h.d)}${h.t1?' · '+hhmm(h.t1):''}</p>
  <div class="watch num"><div><b>${h.sets}</b><small>séries guardadas</small></div><div><b>${h.reps}</b><small>repetições</small></div><div><b>${st.dur}</b><small>min${st.durEst?' ≈':''}</small></div><div><b>${st.kcal}</b><small>kcal${st.kEst?' ≈':''}</small></div></div>
- ${h.ex.map(e=>`<div><h3>${EXN[e.id]||e.id}</h3>${e.sets.map((s,k)=>`<div class="exrow num"><span>✓ Série ${k+1}</span><span>${fmt(s.kg||0)} kg × ${s.r} reps</span></div>`).join('')}</div>`).join('')}
+ ${h.ex.map(e=>`<div class="stack"><h3>${EXN[e.id]||e.id}</h3>${EXN[e.id]?pics({id:e.id,n:EXN[e.id]}):''}${e.sets.map((s,k)=>`<div class="exrow num"><span>✓ Série ${k+1}</span><span>${fmt(s.kg||0)} kg × ${s.r} reps</span></div>`).join('')}</div>`).join('')}
  <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
 }
 function todayWatchCard(){return NATIVE&&S.hc.on?`<div class="card stack"><div class="ex-head"><h3>Relógio · hoje</h3>${watchSyncButton()}</div>${watchCard(TODAY)}${watchSyncStatus()}</div>`:''}
@@ -876,7 +876,7 @@ function imageExerciseIds(h){const title=plainName(h.watch&&h.watch.title),named
  return [...new Set([...h.ex.map(e=>e.id),...(h.imageExerciseIds||[]),...(named.length===1?named:[])])].filter(id=>EXN[id]);
 }
 function historyImages(h,i){const ids=imageExerciseIds(h),key=encodeURIComponent(historyKey(h));
- const images=ids.length?`<details style="margin-top:12px"><summary>Ver imagens dos exercícios (${ids.length})</summary><div class="stack" style="margin-top:10px">${ids.map(id=>`<div><h3>${EXN[id]}</h3>${pics({id,n:EXN[id]})}</div>`).join('')}</div></details>`:h.source==='watch'?'<p class="muted" style="font-size:.9rem;margin-top:10px">O relógio não identificou um exercício com imagem correspondente. Podes associar os exercícios que realizaste.</p>':'';
+ const images=ids.length?`<div class="stack" style="margin-top:12px">${ids.map(id=>`<div class="stack"><h3>${EXN[id]}</h3>${pics({id,n:EXN[id]})}</div>`).join('')}</div>`:h.source==='watch'?'<p class="muted" style="font-size:.9rem;margin-top:10px">O relógio não identificou um exercício com imagem correspondente. Podes associar os exercícios que realizaste.</p>':'';
  return images+`<details style="margin-top:10px"><summary>Associar imagem de um exercício</summary><div class="stack" style="margin-top:10px"><label for="image-select-${i}">Exercício realizado</label><select id="image-select-${i}"><option value="">Escolhe o exercício</option>${Object.entries(EXN).sort((a,b)=>a[1].localeCompare(b[1],'pt')).map(([id,n])=>`<option value="${id}">${n}</option>`).join('')}</select><button class="btn ghost sm" data-act="image-add" data-record="${key}" data-select="image-select-${i}">Associar imagem</button><p class="muted" style="font-size:.85rem">As imagens ajudam a consultar o movimento. Não acrescentam séries, cargas ou repetições ao registo.</p></div></details>`;
 }
 function vHist(){
@@ -903,7 +903,7 @@ function vHist(){
   ${watchDetails(x,i)}
   ${historyImages(x,i)}
   ${x.source==='watch'&&(strengthWatch(x.watch)||x.rotationCode)?rotationSelector(x,'rotation-'+i):''}
-  <details style="margin-top:10px"><summary>${x.source==='watch'?'Dados do registo':'Exercícios ('+x.ex.length+')'}</summary><div style="margin-top:6px">${x.source==='watch'?'<p class="muted">Séries e cargas não foram registadas na app.</p>':x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
+  <details style="margin-top:10px"><summary>${x.source==='watch'?'Dados do registo':'Séries e cargas'}</summary><div style="margin-top:6px">${x.source==='watch'?'<p class="muted">Séries e cargas não foram registadas na app.</p>':x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
   <button class="del" data-act="hdel" data-d="${x.d}" data-c="${x.code}" ${x.source==='watch'?'data-watch="'+encodeURIComponent(x.watch.id)+'"':''}>Apagar este treino</button></details></article>`});
  return h+`<p class="muted" style="font-size:.85rem">≈ estimativa: sem dados do relógio, o tempo vem da hora da 1.ª série até guardares e as calorias são calculadas pelo teu peso e pelo tempo.</p></div>`;
 }
@@ -917,7 +917,7 @@ function vPlano(){
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
   <p class="eyebrow" style="margin-top:12px">Ativação</p><div>${ACT[c].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
   <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">`;
-  const exL=exList(c),card=ex=>`<details><summary>${ex.n} <span class="muted num" style="font-weight:500">· ${ex.sets}×${ex.reps[0]}–${ex.reps[1]} · ${ex.core?'core':ex.iso?'isolado':'composto'}</span></summary>${ex.img?`<div style="margin-top:8px">${pics(ex)}</div>`:''}<ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details>`;
+  const exL=exList(c),card=ex=>`<article class="stack" style="border-top:1px solid var(--line);padding-top:14px;margin-top:8px"><div><h3>${ex.n}</h3><p class="ex-meta num">${ex.sets}×${ex.reps[0]}–${ex.reps[1]} · ${ex.core?'core':ex.iso?'isolado':'composto'}</p></div>${ex.img?pics(ex):''}<details><summary>Técnica e rotação</summary><ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details></article>`;
   if(FLAV==='mary'){(GROUPS[c]||[]).forEach(a=>{h+=`<p class="eyebrow" style="margin-top:8px">${a[0]}</p>`;a[1].forEach(idx=>{h+=card(exL[idx])})})}
   else{let ph=0;exL.forEach(ex=>{const f=ex.core?4:ex.iso?3:2;if(f!==ph){ph=f;h+=`<p class="eyebrow" style="margin-top:8px">Fase ${f===4?(c==='B'||c==='D'?4:3):f} · ${f===2?'Compostos pesados (grandes → pequenos)':f===3?'Isolamento':'Core'}</p>`}h+=card(ex)})}
   h+=`</div></div>`;
