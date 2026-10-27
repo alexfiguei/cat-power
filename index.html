@@ -253,9 +253,9 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 
 <script>
 /* ---------- DADOS DO PLANO ---------- */
-/* Cada exercício é um "posto" com 3 variantes do mesmo movimento (máquina, halteres, cabo...).
-   A variante muda sempre que o treino se repete; a progressão é comparada com a última vez da mesma variante.
-   iso = exercício de isolamento (ganha +1 série nas semanas 3 e 4). img = há fotos da variante. */
+/* Cada exercício é um posto com variantes para o mesmo grupo muscular.
+   As variantes mudam por blocos de sessões realmente registadas, nunca pelo calendário.
+   iso = exercício de isolamento. img = há fotos da variante. */
 const SESS={
  A:{name:'Superior · Força',plate:20,cls:'blue',dur:'60–70 min',ex:[
   {sets:4,reps:[6,10],rest:150,inc:2,v:[
@@ -486,16 +486,30 @@ const ACT={
  C:[['Afastar elástico à frente do peito (band pull-apart)','2 × 15'],['Face pull leve com elástico','1 × 15'],['Flexões na parede ou no banco','1 × 10']],
  D:[['Ponte de glúteos com elástico nos joelhos, pausa 2 s','2 × 15'],['Abdução deitado de lado (concha) com elástico','2 × 12 por lado'],['Passos laterais com elástico (monster walk)','2 × 10 por lado']]
 };
-/* variante de cada posto para o treino de hoje: roda sempre que o treino se repete */
-function rot(code){return Math.max(0,Math.floor((Date.parse(TODAY)-Date.parse(S.start))/(7*864e5)))}
+/* A escolha usa séries reais; um registo genérico do relógio não identifica máquinas. */
+function slotHistory(code,slot){const ids=SESS[code].ex[slot].v.map(e=>e.id);
+ return S.history.filter(h=>h.d<=TODAY&&(!h.t1||h.t1<=Date.now())&&h.code===code).sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).flatMap(h=>(h.ex||[]).filter(e=>ids.includes(e.id)&&e.sets.some(z=>z.r>0)).map(e=>({...e,d:h.d,readiness:h.readiness||'normal'})));}
+function muscleFor(code,slot){const group=(GROUPS[code]||[]).find(g=>g[1].includes(slot));return group?group[0]:'Músculo do exercício';}
+function machineVariant(v){return /máquina|smith|cabo|polia|leg press|leg curl|hack|pendulum|peck deck/i.test(v.n);}
+function variantChoice(code,slot){const sl=SESS[code].ex[slot],history=slotHistory(code,slot),last=history.at(-1),limit=sl.iso||sl.core?4:6;
+ const sequence=sl.v.map((v,i)=>i).sort((a,b)=>Number(machineVariant(sl.v[b]))-Number(machineVariant(sl.v[a])));
+ if(!last)return{vi:sequence[0],uses:0,limit,why:'Primeiro bloco: aprender a execução e estabelecer a carga nesta variante.'};
+ const vi=sl.v.findIndex(v=>v.id===last.id);let uses=0;for(let j=history.length-1;j>=0&&history[j].id===last.id;j--)uses++;
+ const recent=history.slice(-3),first=recent[0]&&recent[0].sets[0];
+ const plateau=uses>=3&&recent.every(e=>e.id===last.id&&e.readiness==='normal'&&e.rir>=1&&e.rir<=3&&e.rir===recent[0].rir&&e.sets.length>=sl.sets&&e.sets[0].kg===first.kg&&e.sets[0].r<=first.r);
+ if(uses>=limit||plateau){const next=sequence[(sequence.indexOf(vi)+1)%sequence.length];return{vi:next,uses:0,limit,why:plateau?'Três registos comparáveis sem subir repetições na primeira série. Nova variante para o mesmo músculo.':'Bloco concluído. Nova variante para o mesmo músculo, com carga própria.',changed:true,previous:last.id};}
+ return{vi,uses,limit,why:`Mantém esta variante para medir a progressão: ${uses} de ${limit} sessões do bloco concluídas.`};
+}
 function marGoal(ex){const g=(typeof S!=='undefined'&&S&&S.profile)?S.profile.goal:null;if(FLAV!=='mary'||!g)return ex;
  if(g==='perder'||g==='definir')return Object.assign({},ex,{reps:[ex.reps[0]+2,ex.reps[1]+3],rest:Math.min(ex.rest,60)});
  if(g==='ganhar')return Object.assign({},ex,{sets:ex.sets+(ex.core?0:1)});
  return ex}
-function exList(code){const r=rot(code);return SESS[code].ex.map((sl,i)=>{const vi=r%sl.v.length;return marGoal(Object.assign({},sl,sl.v[vi],{slot:i,vi,nv:sl.v.length}))})}
+function exList(code){const d=S.drafts[code],active=d&&d.date===TODAY;
+ return SESS[code].ex.map((sl,i)=>{const choice=variantChoice(code,i),pinned=active&&((d.ids||[])[i]||sl.v.find(v=>(d.v[v.id]||[]).some(z=>z&&(z.r>0||z.kg>0||z.done)))?.id),pin=sl.v.findIndex(v=>v.id===pinned),vi=pin>=0?pin:choice.vi;
+ return marGoal(Object.assign({},sl,sl.v[vi],{rest:FLAV!=='mary'&&!sl.iso&&!sl.core?Math.max(120,sl.rest):sl.rest,slot:i,vi,nv:sl.v.length,muscle:muscleFor(code,i),choice:pin>=0&&pin!==choice.vi?{...choice,why:'Variante mantida neste treino em curso.',changed:false}:choice}));});}
 function allVar(code){return SESS[code].ex.flatMap(sl=>sl.v)}
 /* esforço por semana do ciclo (RIR = repetições em reserva) */
-function rirTxt(wk,iso){return wk===1?'3 reps em reserva':wk===2?'2 reps em reserva':wk===3?'1–2 reps em reserva':wk===4?(iso?'0–1 reps em reserva':'1 rep em reserva'):'leve, longe da falha'}
+function rirTxt(wk,iso){return wk===1?'3 reps em reserva':wk===2?'2 reps em reserva':wk<=4?'1–2 reps em reserva':'3–4 reps em reserva'}
 const SCHED={0:'rest',1:'A',2:'B',3:'walk',4:'C',5:'D',6:'walk'};
 const DAYS=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 const DAYS_FULL=['Domingo','Segunda','Terça','Quarta','Quinta','Sexta','Sábado'];
@@ -619,10 +633,10 @@ function saveWorkout(code){
   if(!sets.length)return;
   let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
   const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
-  exs.push({id:ex.id,sets});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
+  const rir=d.rir&&d.rir[ex.id];exs.push({id:ex.id,sets,...(Number.isInteger(rir)?{rir}:{} )});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets,rir:Number.isInteger(rir)?rir:null});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
  });
  if(!exs.length){toast('Ainda não registaste nenhuma série');return false}
- const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;if(old&&old.watch)rec.watch=old.watch;if(old&&old.imageExerciseIds)rec.imageExerciseIds=[...old.imageExerciseIds];
+ const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;rec.readiness=d.readiness||'normal';if(old&&old.watch)rec.watch=old.watch;if(old&&old.imageExerciseIds)rec.imageExerciseIds=[...old.imageExerciseIds];
  next.history=next.history.filter(h=>!(h.d===TODAY&&h.code===code));next.history.push(rec);
  next.sessions=next.sessions.filter(x=>x.d!==TODAY);next.sessions.push({d:TODAY,code});next.sessions.sort((a,b)=>a.d<b.d?-1:1);
  const watches=next.history.filter(h=>h.d===TODAY&&h.watch).map(h=>h.watch);if(next.watch[TODAY]&&next.watch[TODAY].id)watches.push(next.watch[TODAY]);
@@ -636,35 +650,39 @@ function targets(){const p=S.profile,G=goal(),age=p.age||30;const bmr=10*p.w+6.2
  const kcal=Math.max(p.sex==='f'?1300:1600,Math.round((tdee+G.kcal+S.adj)/10)*10);const P=Math.round(G.P*p.w),F=Math.round(G.F*p.w),C=Math.max(0,Math.round((kcal-P*4-F*9)/4));
  return{bmr:Math.round(bmr),tdee:Math.round(tdee),kcal,P,F,C}}
 function cycleWeek(){const days=Math.max(0,Math.floor((Date.parse(TODAY)-Date.parse(S.start))/864e5));return Math.floor(days/7)%5+1}
-function lastLog(id){const a=S.logs[id];return a&&a.length?a[a.length-1]:null}
+function lastLog(id){const a=(S.logs[id]||[]).filter(x=>x.d<=TODAY).sort((a,b)=>a.d.localeCompare(b.d));return a.at(-1)||null}
 function sugg(ex){const l=lastLog(ex.id);if(!l)return null;const kgs=l.sets.map(s=>s.kg).filter(x=>x>0);const top=kgs.length?Math.max(...kgs):0;
- const hit=l.sets.length>=ex.sets&&l.sets.every(s=>s.r>=ex.reps[1]);return{l,top,hit,next:hit&&top?top+ex.inc:top}}
+ const hit=l.sets.length>=ex.sets&&l.sets.every(s=>s.r>=ex.reps[1]&&s.kg===top)&&l.rir>=1;
+ return{l,top,hit,stale:Date.parse(TODAY)-Date.parse(l.d)>42*864e5,next:hit&&top?top+ex.inc:top}}
 /* treinador: sugere o peso de cada série — no início pelo último treino, depois pela série anterior de hoje */
 const rnd=(x,inc)=>{const st=inc<=1.25?0.5:1;return Math.max(st,Math.round(x/st)*st)};
 function coachStart(ex,g,deload){
  if(!g||!g.top)return null;const lo=ex.reps[0],hi=ex.reps[1],rs=g.l.sets.map(x=>x.r);
  if(deload)return{kg:half(g.top*0.9),why:'semana leve: 10% abaixo do habitual'};
+ if(g.stale)return{kg:rnd(g.top*0.9,ex.inc),why:'mais de 6 semanas sem esta variante: recomeça com margem e confirma a execução'};
+ if(g.l.rir===0)return{kg:g.top,why:'a última série chegou à falha: mantém a carga e procura 1–2 repetições de reserva'};
  if(g.hit)return{kg:g.top+ex.inc,why:`da última vez chegaste às ${hi} reps em todas as séries`};
  const avg=rs.reduce((a,b)=>a+b,0)/rs.length;
  if(avg<lo-2)return{kg:rnd(g.top*0.9,ex.inc),why:`da última vez ficaste longe das ${lo} reps`};
  if(avg<lo)return{kg:Math.max(ex.inc,g.top-ex.inc),why:`da última vez ficaste abaixo das ${lo} reps`};
- return{kg:g.top,why:`mantém e tenta chegar às ${hi} reps em todas`};
+ return{kg:g.top,why:`mantém e tenta chegar às ${hi} reps em todas; regista a reserva na última série`};
 }
 function coachNext(ex,prev){
  const lo=ex.reps[0],hi=ex.reps[1],kg=prev.kg,r=prev.r;
- if(r>=hi+3)return{kg:kg+2*ex.inc,why:`fizeste ${r} reps com ${fmt(kg)} kg — estava muito leve`};
  if(r>hi)return{kg:kg+ex.inc,why:`fizeste ${r} reps com ${fmt(kg)} kg — passaste das ${hi}`};
  if(r>=lo)return{kg,why:`fizeste ${r} reps com ${fmt(kg)} kg — dentro do alvo, mantém`};
  if(r>=lo-2)return{kg:Math.max(ex.inc,kg-ex.inc),why:`fizeste ${r} reps com ${fmt(kg)} kg — abaixo das ${lo}`};
  return{kg:rnd(kg*0.85,ex.inc),why:`fizeste ${r} reps com ${fmt(kg)} kg — muito abaixo das ${lo}`};
 }
 function coachPlan(ex,g,deload,n,vals){
- const out=[];let cur=coachStart(ex,g,deload);
+ const out=[];let cur=coachStart(ex,g,deload);const d=S.drafts[ui.code],recovery=d?.readiness||'normal',failure=d?.rir?.[ex.id]===0;
+ if(recovery==='pain')return Array(n).fill(null);
+ if(recovery==='tired'&&cur)cur={kg:rnd(cur.kg*.9,ex.inc),why:'recuperação fraca hoje: reduz a carga e deixa 3 repetições de reserva'};
  for(let k=0;k<n;k++){out.push(cur);const v=vals[k]||{};
-  if(v.done&&v.kg>0&&v.r>0)cur=coachNext(ex,v);}
+  if(v.done&&v.kg>0&&v.r>0){cur=coachNext(ex,v);if((recovery==='tired'||failure||deload)&&cur.kg>v.kg)cur={kg:v.kg,why:'mantém a carga e deixa margem para completar com boa técnica'};}}
  return out;
 }
-function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){d=S.drafts[code]={date:TODAY,v:{}}}return d}
+function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){const ids=exList(code).map(e=>e.id);d=S.drafts[code]={date:TODAY,v:{},ids,rir:{},readiness:'normal'}}return d}
 const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
 
@@ -793,8 +811,9 @@ if(FLAV==='mary'){(function(){
 })()}
 
 function exCard(ex,i,wk,deload,d){
- const g=sugg(ex),n=deload?Math.ceil(ex.sets/2):ex.sets+(ex.iso&&wk>=3?1:0);
+ const g=sugg(ex);let n=deload?Math.ceil(ex.sets/2):d.readiness==='tired'?Math.max(1,ex.sets-1):ex.sets;
  const vals=d.v[ex.id]||[];
+ n=Math.max(n,vals.length);
  const plan=coachPlan(ex,g,deload,n,vals);
  let rows='';
  for(let k=0;k<n;k++){const v=vals[k]||{};const pre=plan[k]?plan[k].kg:null;
@@ -811,8 +830,11 @@ function exCard(ex,i,wk,deload,d){
  else if(nk!==undefined&&nk>0){tip=`<p class="coach"><b>Treinador:</b> escreve os kg da série anterior para eu sugerir a próxima.</p>`}
  else if(nk===undefined&&n>0&&plan[n-1]){const lv=vals[n-1]||{};const nx=lv.kg>0&&lv.r>0?coachNext(ex,lv):null;
   if(nx&&nx.kg>lv.kg)tip=`<p class="coach"><b>Treinador:</b> estava leve — da próxima vez começa com <span class="up">${fmt(nx.kg)} kg</span>.</p>`}
- return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR').replace(' rep em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.core?'Core':ex.iso?'Isolado':'Composto'} · versão ${ex.vi+1} de ${ex.nv} · muda para a semana</p></div><span class="ex-idx">${pad(i+1)}</span></div>
- ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}${hist}<div class="sets">${rows}</div>${tip}
+ const rir=d.rir&&d.rir[ex.id];
+ return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':d.readiness==='tired'?'3 RIR':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.muscle} · variante ${ex.vi+1} de ${ex.nv}</p></div><span class="ex-idx">${pad(i+1)}</span></div>
+ ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':'Bloco de progressão'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}<div class="sets">${rows}</div>${tip}
+ <label>Reserva na última série (RIR)<select class="rotation-select" data-rir="${ex.id}" aria-label="Reserva na última série de ${ex.n}"><option value="">Ainda não registei</option>${[0,1,2,3,4].map(r=>`<option value="${r}" ${rir===r?'selected':''}>${r===0?'0 · não conseguia fazer mais nenhuma':r===4?'4 ou mais':r+' '+(r===1?'repetição':'repetições')+' em reserva'}</option>`).join('')}</select></label>
+ <button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}">Trocar variante · ${ex.muscle}</button>
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
 }
 function savedWorkoutCard(h){const st=hStats(h);
@@ -831,10 +853,11 @@ function vHoje(){
  <p class="eyebrow">Próximo treino pelo teu histórico</p>
  <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Selecionado</small>':c===nx?'<small class="nx">Sugerido</small>':''}</button>`).join('')}</div>
  ${recommendationCard()}
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Esta semana cada exercício muda de máquina ou forma de o fazer, para não ser repetitivo. Tenta bater a última vez que fizeste esta versão (+1 rep ou +peso).`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core. A app pode antecipar a troca após 3 registos comparáveis sem progresso.`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
+ <section class="card stack"><h3>Como estás hoje?</h3><label>Recuperação<select id="readiness" class="rotation-select"><option value="normal" ${(d.readiness||'normal')==='normal'?'selected':''}>Normal · pronto para treinar</option><option value="tired" ${d.readiness==='tired'?'selected':''}>Cansado · sono ou recuperação fracos</option><option value="pain" ${d.readiness==='pain'?'selected':''}>Dor articular ou aguda</option></select></label><p class="muted">${d.readiness==='pain'?'Interrompe os movimentos que provocam dor. Não há sugestões de aumento de carga; pede avaliação ao profissional do ginásio ou de saúde.':d.readiness==='tired'?'Hoje: menos uma série por exercício, carga inicial sugerida mais baixa e 3 repetições de reserva. Os valores que já registaste mantêm-se.':'Regista as séries e a reserva final. A próxima sugestão usa esses dados, sempre na mesma variante.'}</p></section>
  <div class="card stack"><div><p class="eyebrow">Fase 1 · 10–12 min</p><h3>Aquecimento e ativação</h3></div>
   <p class="muted" style="font-size:.95rem">5 min de bicicleta ou elíptica. Depois ativa os músculos de hoje, sem cansar: o objetivo é sentir o músculo a trabalhar.</p>
   <div>${ACT[code].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
@@ -908,6 +931,35 @@ function vHist(){
  return h+`<p class="muted" style="font-size:.85rem">≈ estimativa: sem dados do relógio, o tempo vem da hora da 1.ª série até guardares e as calorias são calculadas pelo teu peso e pelo tempo.</p></div>`;
 }
 
+/* ---------- ACOMPANHAMENTO E CRITÉRIOS ---------- */
+function evolutionCard(){const rows=[];ORDER.forEach(code=>SESS[code].ex.forEach((sl,slot)=>{const hist=slotHistory(code,slot).filter(e=>Date.parse(TODAY)-Date.parse(e.d)<28*864e5);if(!hist.length)return;
+ const latest=hist.at(-1),same=hist.filter(e=>e.id===latest.id),previous=same.at(-2),s=latest.sets[0],p=previous&&previous.sets[0];
+ const line=p?`${fmt(p.kg||0)} kg × ${p.r} → ${fmt(s.kg||0)} kg × ${s.r}`:`${fmt(s.kg||0)} kg × ${s.r} · primeiro registo comparável`;
+ rows.push(`<details><summary>${muscleFor(code,slot)} · treino ${code}</summary><p><b>${EXN[latest.id]}</b></p><p class="num">${line}</p><p class="muted">Primeira série de trabalho · ${dshort(latest.d)}. ${hist.reduce((sum,e)=>sum+e.sets.length,0)} séries registadas neste posto nos últimos 28 dias.</p></details>`);}));
+ return `<section class="card stack"><p class="eyebrow">Últimos 28 dias</p><h2>Evolução por músculo</h2><p>Acompanhamento atualizado ao guardar treinos. A comparação usa a mesma variante; mais kg noutra máquina não é um recorde equivalente.</p>${rows.length?rows.join(''):'<p class="muted">Ainda não há séries identificadas neste período. Os treinos do relógio mostram atividade, mas não permitem deduzir máquinas, cargas ou repetições.</p>'}<p class="muted" style="font-size:.88rem">As séries estão agrupadas pelo foco de cada posto. Cargas e peso corporal não medem diretamente o ganho de massa muscular.</p></section>`;
+}
+function methodCard(){const sources=[
+ ['Fabrício Pacholok','https://fabriciopacholok.com.br/','Registar cargas, cuidar da execução e manter uma progressão organizada.'],
+ ['Hany Rambod','https://www.evogennutrition.com/blogs/news/rest-period-timing','Descanso suficiente nos compostos pesados e atenção à execução.'],
+ ['Chris Aceto','https://www.muscleandfitness.com/nutrition/gain-mass/eat-yourself-huge-2/','Reavaliar a alimentação pela resposta ao longo de semanas.'],
+ ['Milos Sarcev','https://jymsupplementscience.com/blogs/articles/pounding-chest-with-milos-sarcev-giant-sets','Vários ângulos e equipamentos para o mesmo músculo. Adaptado aqui em blocos, sem copiar as séries gigantes do protocolo de atletas.'],
+ ['Matt Jansen','https://www.projectad.me/blogs/news/matt-jansen-s-pre-contest-training-program-during-the-final-phase-of-prep','Aquecimento e ajuste do esforço ao contexto. O artigo é de preparação competitiva; o protocolo de falha não foi transposto.'],
+ ['Júlio Balestrin','https://www.youtube.com/playlist?list=PLx6UfnuK_tlah9Vxgr3RduwmOhzZ8jloB','Série pública de treinos para iniciantes localizada. Sem transcrição verificável nesta consulta; não foram atribuídas regras específicas ao vídeo.'],
+ ['Ricardo Pannain','https://teampannain.com/','Treino e alimentação acompanhados em conjunto. A página pública não disponibiliza o protocolo individual.'],
+ ['Rubens Gomes','https://overallteam.com.br/','Organização de treino e dieta com revisões periódicas. As planilhas privadas não foram consultadas.']
+ ];return `<section class="card stack"><h2>Critérios e fontes</h2><p>Plano da Cat Power, adaptado de princípios públicos e literatura de hipertrofia. Não é uma prescrição nem um acompanhamento destes treinadores.</p><details><summary>O que foi consultado e aplicado</summary><ul class="list">${sources.map(([name,url,note])=>`<li><a href="${url}" target="_blank" rel="noopener">${name} ↗</a>: ${note}</li>`).join('')}</ul><p><a href="https://pubmed.ncbi.nlm.nih.gov/35438660/" target="_blank" rel="noopener">Revisão sobre variação planeada de exercícios ↗</a></p><p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6680710/" target="_blank" rel="noopener">Revisão sobre alimentação para hipertrofia ↗</a></p><p class="muted">Consulta: 27/10/2026. Blocos de 4/6 exposições e ajuste de 150 kcal são escolhas conservadoras da app, não regras comuns a todos os especialistas.</p></details></section>`;
+}
+function nutritionReview(){const entries=[...new Map(S.weights.filter(w=>w.d<=TODAY&&w.kg>=30&&w.kg<=250).map(w=>[w.d,w])).values()].sort((a,b)=>a.d.localeCompare(b.d)),recent=entries.filter(w=>Date.parse(TODAY)-Date.parse(w.d)<21*864e5),r=trend();
+ const last=S.nutrition&&S.nutrition.lastAdjust,cooldown=last&&Date.parse(TODAY)-Date.parse(last)<14*864e5;
+ if(cooldown)return{delta:0,why:`Ajuste aplicado a ${dshort(last)}. Mantém 14 dias antes de voltar a alterar calorias.`,rate:r};
+ const week=recent.filter(w=>Date.parse(TODAY)-Date.parse(w.d)<7*864e5),prior=recent.filter(w=>{const age=Date.parse(TODAY)-Date.parse(w.d);return age>=7*864e5&&age<14*864e5});
+ if(r===null||recent.length<6||week.length<2||prior.length<2)return{delta:0,why:'Regista o peso de manhã, nas mesmas condições, 2–3 vezes por semana. Preciso de pelo menos 6 pesagens ao longo de 14 dias, incluindo as duas semanas recentes, antes de propor um ajuste.',rate:r};
+ const G=goal(),delta=r<G.lo?150:r>G.hi?-150:0;if(!delta)return{delta:0,why:'Tendência dentro do intervalo do objetivo. Mantém a alimentação e acompanha o treino.',rate:r};
+ if(Math.abs((S.adj||0)+delta)>600)return{delta:0,why:'O ajuste acumulado já é elevado. Revê os dados do perfil e a alimentação com um nutricionista antes de continuar a alterar calorias.',rate:r};
+ return{delta,why:`Tendência ${r<G.lo?'abaixo':'acima'} do intervalo do objetivo. Se cumpriste aproximadamente o plano, propõe-se ${delta>0?'+':''}${delta} kcal/dia, com nova revisão após 14 dias.`,rate:r};
+}
+function nutritionReviewCard(){const n=nutritionReview();return `<section class="card stack"><h3>Ajuste pela tua evolução</h3>${n.rate!==null?`<p class="num">Tendência: ${n.rate>0?'+':''}${fmt(Math.round(n.rate*100)/100)} kg/semana</p>`:''}<p>${n.why}</p>${n.delta?`<label><input type="checkbox" id="food-adherence"> Cumpri aproximadamente o plano nas últimas duas semanas</label><button class="btn sm" data-act="nutrition-apply">Aplicar ${n.delta>0?'+':''}${n.delta} kcal</button>`:''}<p class="muted" style="font-size:.88rem">O peso também varia com água e digestão. A app não adiciona automaticamente as calorias do relógio à alimentação. O alvo e as porções acompanham os dados do perfil.</p></section>`;}
+
 /* ---------- PLANO ---------- */
 function vPlano(){
  let h=`<div class="stack"><div><p class="eyebrow">4 treinos em rotação · ciclo de 5 semanas</p><h1>O teu plano</h1></div>
@@ -924,23 +976,23 @@ function vPlano(){
  });
  h+=`<div class="card stack"><h2>Regras do jogo</h2><ul class="list">
   <li><b>Ordem de cada treino:</b> ${FLAV==='mary'?'1) ativação, 2) por músculo — o composto e logo o isolado desse músculo, antes de passar ao seguinte, 3) core no fim.':'1) ativação leve, 2) compostos pesados, do músculo grande (peito, costas, coxas) para o pequeno (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.'}</li>
-  <li><b>Esforço sobe ao longo do ciclo:</b> semana 1 com 3 repetições em reserva (RIR), semana 2 com 2, semana 3 com 1–2, semana 4 com 1 (isolamento até 0–1). Técnica limpa vale mais que peso.</li>
-  <li><b>Volume:</b> nas semanas 3 e 4 os exercícios de isolamento ganham +1 série.</li>
-  <li><b>Variedade semanal:</b> cada exercício tem 3 versões do mesmo movimento (máquina, halteres, cabo…). A app muda de versão a cada semana, para o estímulo não ser sempre igual, e compara sempre com a última vez que fizeste a mesma versão.</li>
-  <li><b>Progressão dupla:</b> quando fazes o topo da faixa em todas as séries, sobe o peso (≈2 kg tronco, 5 kg pernas). A app avisa no ecrã Hoje.</li>
+  <li><b>Esforço:</b> começa com 3 repetições em reserva (RIR), depois 2 e, quando recuperado, 1–2. Regista a reserva na última série; não precisas de procurar a falha.</li>
+  <li><b>Volume e recuperação:</b> as séries não aumentam só por mudar a semana. Se estás cansado, a app reduz o treino proposto; preserva sempre as séries que já escreveste.</li>
+  <li><b>Máquinas por blocos:</b> há várias variantes para o mesmo grupo muscular. A app dá prioridade a máquinas e cabos quando disponíveis, mantém os compostos por 6 sessões e os isolados/core por 4. Pode antecipar uma troca após 3 registos completos com carga e reserva comparáveis sem mais repetições na primeira série. Um registo genérico do relógio não avança estes blocos.</li>
+  <li><b>Progressão dupla:</b> atinge o topo da faixa em todas as séries com a mesma carga e pelo menos 1 repetição em reserva antes de subir o menor incremento previsto. Os kg não passam de uma máquina para outra.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
-  <li><b>Descarga:</b> a cada 5.ª semana, metade das séries e −10% de peso. Tendões e articulações precisam disto.</li>
+  <li><b>Redução de esforço:</b> a 5.ª semana propõe metade das séries e −10% de carga. É uma estrutura de base; a recuperação de cada dia também conta.</li>
   <li><b>Dor:</b> ardor no músculo é normal. Dor aguda na articulação = para e troca o exercício.</li>
   <li><b>Sono:</b> 7–8 h por noite. Sem sono não há massa.</li>
   <li><b>Antes de começar:</b> se há muito tempo não fazes análises e um check-up (tensão, coração), marca-o.</li>
- </ul></div></div>`;
+ </ul></div>${methodCard()}</div>`;
  return h;
 }
 
 /* ---------- REFEIÇÕES ---------- */
 function vRef(){
  const p=S.profile,t=targets(),G=goal(),age=p.age||30,mp=mealPlan(t),T=mp.T,per=Math.round(t.P/mp.meals.length/5)*5,agua=Math.round(p.w*0.035*2)/2;
- const extra=p.goal==='ganhar'?'<li><b>Sem fome?</b> Batido: 300 ml leite, 50 g aveia, 1 banana, 20 g manteiga de amendoim ≈ 650 kcal.</li>':
+ const extra=p.goal==='ganhar'?'<li><b>Sem fome?</b> Um batido pode ajudar a cumprir o alvo: contabiliza leite, aveia, banana e manteiga de amendoim nas porções do dia, em vez de o somar automaticamente ao plano.</li>':
   (p.goal==='perder'||p.goal==='definir')?'<li><b>Fome?</b> Começa as refeições pelos legumes e pela proteína. Fruta inteira sacia mais do que sumo.</li><li><b>Sem pressa:</b> perder ½ kg por semana protege o músculo e dá energia para treinar.</li>':'';
  return `<div class="stack"><div><p class="eyebrow">${G.eb}</p><h1>${G.h1}</h1></div>
  <div class="card stack"><h3>Alvo diário</h3><div class="macros num">
@@ -948,11 +1000,12 @@ function vRef(){
   <div class="macro"><b>${t.P}</b><small>Proteína g</small></div>
   <div class="macro"><b>${t.C}</b><small>Hidratos g</small></div>
   <div class="macro"><b>${t.F}</b><small>Gordura g</small></div></div>
-  <p class="muted" style="font-size:.92rem">Calculado para ${p.sex==='f'?'mulher':'homem'}, ${age} anos, ${p.h} cm, ${fmt(p.w)} kg · objetivo: ${G.n.toLowerCase()}. Proteína a ${fmt(G.P)} g/kg, gordura a ${fmt(G.F)} g/kg, o resto em hidratos.${S.adj?` Inclui ajuste de ${S.adj>0?'+':''}${S.adj} kcal.`:''}</p></div>
+  <p class="muted" style="font-size:.92rem">Estimativa inicial para ${p.sex==='f'?'mulher':'homem'}, ${age} anos, ${p.h} cm, ${fmt(p.w)} kg · objetivo: ${G.n.toLowerCase()}. Proteína a ${fmt(G.P)} g/kg, gordura a ${fmt(G.F)} g/kg, o resto em hidratos.${S.adj?` Inclui ajuste de ${S.adj>0?'+':''}${S.adj} kcal.`:''}</p><p class="muted">Para ganho de massa, o plano usa 2 g de proteína/kg, dentro do intervalo de 1,6–2,2 g/kg da revisão consultada. Distribui a proteína ao longo do dia e usa hidratos para apoiar o treino.</p></div>
+ ${nutritionReviewCard()}
  <div class="card"><h3>Um dia tipo</h3><p class="muted num" style="font-size:.9rem;margin-top:2px">≈ ${T.k} kcal · ${T.p} g P · ${T.c} g H · ${T.f} g G</p>
   <div style="margin-top:6px">${mp.meals.map(m=>`<div class="meal"><time class="num">${m.t}</time><div><b>${m.n}</b><ul>${m.it.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mm num">${m.k} kcal · ${m.p} g proteína</p></div></div>`).join('')}</div>
   <p class="banner" style="margin-top:8px">As quantidades são calculadas para o teu alvo. Quando mudas o peso ou o objetivo, o plano ajusta-se sozinho.</p></div>
- <div class="card stack"><h3>Trocas equivalentes</h3><div class="kv num">
+ <div class="card stack"><h3>Alternativas de alimentos</h3><p class="muted">Valores aproximados. Uma troca de proteína não garante as mesmas calorias ou gordura; ajusta as porções ao alvo diário e aos rótulos.</p><div class="kv num">
   <span>110 g arroz cru</span><span>110 g massa crua · 450 g batata</span>
   <span>80 g aveia</span><span>120 g pão integral</span>
   <span>150 g frango cru</span><span>170 g pescada · 4 ovos + 2 claras</span>
@@ -972,8 +1025,8 @@ function vRef(){
 }
 
 /* ---------- EU ---------- */
-function trend(){const cut=Date.parse(TODAY)-28*864e5;const w=S.weights.filter(x=>Date.parse(x.d)>=cut);if(w.length<3)return null;
- const xs=w.map(x=>(Date.parse(x.d)-cut)/(7*864e5)),ys=w.map(x=>x.kg);if((xs[xs.length-1]-xs[0])*7<10)return null;
+function trend(){const cut=Date.parse(TODAY)-28*864e5;const w=[...new Map(S.weights.filter(x=>x.d<=TODAY&&Date.parse(x.d)>=cut&&x.kg>=30&&x.kg<=250).map(x=>[x.d,x])).values()].sort((a,b)=>a.d.localeCompare(b.d));if(w.length<6)return null;
+ const xs=w.map(x=>(Date.parse(x.d)-cut)/(7*864e5)),ys=w.map(x=>x.kg);if((xs[xs.length-1]-xs[0])*7<14)return null;
  const mx=xs.reduce((a,b)=>a+b)/xs.length,my=ys.reduce((a,b)=>a+b)/ys.length;let nu=0,de=0;xs.forEach((x,i)=>{nu+=(x-mx)*(ys[i]-my);de+=(x-mx)**2});return de?nu/de:null}
 function chart(){const w=[...S.weights].sort((a,b)=>a.d<b.d?-1:1).slice(-30);
  if(w.length<2)return `<p class="muted" style="font-size:.92rem">O gráfico aparece a partir do 2.º registo. Pesa-te 2–3 vezes por semana, de manhã, em jejum, depois da casa de banho.</p>`;
@@ -1020,16 +1073,13 @@ function vSetup(){const m=FLAV==='mary';
  <p class="muted" style="font-size:.9rem">Podes mudar tudo mais tarde no separador «Eu».</p></div>`}
 function vEu(){
  const p=S.profile,t=targets(),r=trend(),G=goal(),sg=x=>(x>0?'+':'')+fmt(x);
- let rec=`<p class="muted" style="font-size:.92rem">Com 3 ou mais registos em 10+ dias, a app diz-te se deves comer mais ou menos. Para «${G.n}» o ritmo certo é ${sg(G.lo)} a ${sg(G.hi)} kg por semana.</p>`;
- if(r!==null){const rs=sg(Math.round(r*100)/100)+' kg/semana';
-  if(r<G.lo)rec=`<p><span class="pill warn">${rs}</span> ${G.lo<0?'A descer depressa demais: assim perdes músculo. Come mais 150 kcal por dia.':'Abaixo do alvo. Come mais 150 kcal por dia.'}</p><button class="btn sm" data-act="adj" data-v="150">Aplicar +150 kcal</button>`;
-  else if(r>G.hi)rec=`<p><span class="pill warn">${rs}</span> ${G.hi>0?'Rápido demais: vai ser sobretudo gordura. Tira 150 kcal por dia.':G.lo<-0.1?'Ainda não está a descer o suficiente. Tira 150 kcal por dia.':'O peso está a subir. Tira 150 kcal por dia.'}</p><button class="btn sm" data-act="adj" data-v="-150">Aplicar −150 kcal</button>`;
-  else rec=`<p><span class="pill ok">${rs}</span> Ritmo certo. Mantém.</p>`}
  const wk=cycleWeek();
  return `<div class="stack"><div><p class="eyebrow">Perfil e progresso</p><h1>Eu</h1></div>
  <div class="card stack"><h3>Peso corporal</h3>
   <div class="row"><label class="fld"><input id="w-in" inputmode="decimal" autocomplete="off" placeholder="${fmt(S.weights.length?S.weights[S.weights.length-1].kg:p.w)}" aria-label="Peso de hoje"><span>kg</span></label><button class="btn sm" data-act="weigh">Registar hoje</button></div>
-  ${chart()}${rec}</div>
+  ${chart()}</div>
+ ${nutritionReviewCard()}
+ ${evolutionCard()}
  <div class="card stack"><h3>Os meus dados</h3>${profForm(p)}
   <div class="kv num"><span>Metabolismo basal</span><span>${t.bmr} kcal</span><span>Gasto diário estimado</span><span>${t.tdee} kcal</span><span>Alvo: ${G.n.toLowerCase()}</span><span>${t.kcal} kcal</span>${S.adj?`<span>Ajuste aplicado</span><span>${S.adj>0?'+':''}${S.adj} kcal</span>`:''}</div>
   ${S.adj?'<button class="btn ghost sm" data-act="adj0">Repor ajuste a 0</button>':''}
@@ -1058,6 +1108,8 @@ document.addEventListener('input',e=>{const el=e.target;
   else return;save();if(S.setup)refreshKV()}
 });
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
+ if(e.target.dataset.rir){const next=JSON.parse(JSON.stringify(S)),d=next.drafts[ui.code];if(!d)return;d.rir=d.rir||{};const value=v===''?null:Number(v);if(value!==null&&(!Number.isInteger(value)||value<0||value>4))return;d.rir[e.target.dataset.rir]=value;if(save(next))render();return;}
+ if(id==='readiness'){if(!['normal','tired','pain'].includes(v))return;const next=JSON.parse(JSON.stringify(S));next.drafts[ui.code].readiness=v;if(save(next))render();return;}
  if(id==='p-act')S.profile.act=parseFloat(v);else if(id==='p-sex')S.profile.sex=v;else if(id==='p-goal')S.profile.goal=v;else return;
  save();if(S.setup)render()});
 function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{const f=document.activeElement&&document.activeElement.id;render();if(f){const el=document.getElementById(f);if(el){el.focus();const l=el.value.length;try{el.setSelectionRange(l,l)}catch(e){}}}},700)}
@@ -1067,6 +1119,10 @@ document.addEventListener('click',e=>{
  const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
  if(a==='code'){ui.code=b.dataset.c;ui.editing=false;ui.manualChoice=true;render();toast(`Plano ${ui.code} selecionado. A sequência só avança depois de um treino concluído.`)}
+ else if(a==='variant'){const slot=Number(b.dataset.slot),code=ui.code,sl=SESS[code]&&SESS[code].ex[slot];if(!sl)return;const current=exList(code),d=draft(code),id=current[slot].id;
+  if((d.v[id]||[]).some(s=>s&&(s.done||s.r>0||s.kg>0))){toast('Esta variante já tem séries registadas neste treino. Guarda-as antes de trocar.');return;}
+  const next=JSON.parse(JSON.stringify(S)),target=next.drafts[code];target.ids=current.map(e=>e.id);target.ids[slot]=sl.v[(current[slot].vi+1)%sl.v.length].id;
+  if(save(next)){render();toast('Variante trocada para o mesmo grupo muscular. Usa a carga própria desta versão.');}}
  else if(a==='next-workout'){const code=suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
  else if(a==='rotation-save'){const code=document.getElementById(b.dataset.select).value;if(!ORDER.includes(code)&&code!=='none'){toast('Indica o treino que realizaste');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.rotationCode=code;if(save(next)){ui.manualChoice=false;render();const n=nextCode();toast(n?`Próximo treino: ${n} · ${SESS[n].name}`:'Treino confirmado. Falta identificar a sessão mais recente.')}}
  else if(a==='photo-open'){openPhoto(b.dataset.ex,+b.dataset.pos)}
@@ -1075,7 +1131,7 @@ document.addEventListener('click',e=>{
  else if(a==='photo-more'||a==='photo-less'){PHOTO.zoom=Math.max(1,Math.min(3,PHOTO.zoom+(a==='photo-more'?.5:-.5)));updatePhoto()}
  else if(a==='image-add'){const id=document.getElementById(b.dataset.select).value;if(!EXN[id]){toast('Escolhe o exercício realizado');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.imageExerciseIds=[...new Set([...(h.imageExerciseIds||[]),id])];if(save(next)){render();toast('Imagem associada ao registo ✓')}}
  else if(a==='history'){ui.tab='historico';render();window.scrollTo(0,0)}
- else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
+ else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,readiness:h.readiness||'normal',rir:Object.fromEntries(h.ex.filter(e=>Number.isInteger(e.rir)).map(e=>[e.id,e.rir])),v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
  else if(a==='done'){
   const code=ui.code;const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
   if(v.done){v.done=false;save();render();return}
@@ -1097,6 +1153,8 @@ document.addEventListener('click',e=>{
   allVar(cc).forEach(e=>{if(S.logs[e.id])S.logs[e.id]=S.logs[e.id].filter(l=>l.d!==dd)});save();render();toast('Treino apagado')}
  else if(a==='weigh'){const v=num($('#w-in').value);if(!v||v<30||v>250){toast('Escreve o peso em kg, por exemplo 86,4');return}
   S.weights=S.weights.filter(x=>x.d!==TODAY);S.weights.push({d:TODAY,kg:v});S.weights.sort((x,y)=>x.d<y.d?-1:1);S.profile.w=v;save();render();toast('Peso registado')}
+ else if(a==='nutrition-apply'){const review=nutritionReview();if(!review.delta)return;if(!document.getElementById('food-adherence').checked){toast('Confirma se cumpriste aproximadamente a alimentação antes de ajustar.');return;}
+  const next=JSON.parse(JSON.stringify(S));next.adj=(next.adj||0)+review.delta;next.nutrition={lastAdjust:TODAY,delta:review.delta,goal:next.profile.goal};if(save(next)){render();toast(`Alvo atualizado: ${targets().kcal} kcal. Nova revisão em 14 dias.`);}}
  else if(a==='adj'){S.adj+=+b.dataset.v;save();render();toast(`Novo alvo: ${targets().kcal} kcal`)}
  else if(a==='hc'){hcConnect()}
  else if(a==='watch'){syncWatch(TODAY,false)}

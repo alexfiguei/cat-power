@@ -33,7 +33,8 @@ function app(storage = new Map(), flavor = 'cat') {
   vm.createContext(context); vm.runInContext(source, context);
   return { control, storage, nodes, read: code => vm.runInContext(code, context),
     click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })),
-    input: target => listeners.input.forEach(cb => cb({target})) };
+    input: target => listeners.input.forEach(cb => cb({target})),
+    change: target => listeners.change.forEach(cb => cb({target})) };
 }
 function seedDraft(a) {
   a.read(`ui.code='A'; S.setup=true; const ex=exList('A')[0]; S.drafts.A={date:TODAY,t0:Date.parse('2026-10-27T20:00:00Z'),v:{[ex.id]:[{kg:20,r:10,done:true},{kg:22.5,r:8,done:true}]}}; save()`);
@@ -209,5 +210,55 @@ function workout(id = 'strength', overrides = {}) {
   report.click('photo-more');assert.equal(report.nodes.get('#photo-large').style.width,'150%');
   report.click('photo-next');assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_1.jpg');
   report.click('photo-close');assert.equal(report.nodes.get('#photo-dialog').open,false);
+  // Block rotation depends on actual exercise exposures, not calendar weeks or watch labels.
+  const adaptive=app();
+  const first=adaptive.read('exList("A")[0].id');
+  assert.equal(first,'sup_incl_maq');
+  adaptive.read('S.drafts={};S.start="2025-01-01"');
+  assert.equal(adaptive.read('exList("A")[0].id'),first);
+  adaptive.read(`S.history=Array.from({length:5},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'sup_incl_maq',sets:[{kg:20,r:8+i}]}]}));S.drafts={}`);
+  assert.equal(adaptive.read('exList("A")[0].id'),first);
+  adaptive.read(`S.history.push({d:'2026-10-06',code:'A',ex:[{id:'sup_incl_maq',sets:[{kg:20,r:12}]}]});S.drafts={}`);
+  assert.notEqual(adaptive.read('exList("A")[0].id'),first);
+  assert.equal(adaptive.read('exList("A")[0].muscle'),'Peito');
+  const pinned=adaptive.read('draft("A").ids[0]');
+  adaptive.read(`S.history=[]`);
+  assert.equal(adaptive.read('exList("A")[0].id'),pinned);
+  adaptive.read(`S.drafts={};S.history=Array.from({length:4},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'elev_lat_maq',sets:[{kg:5,r:12}]}]}))`);
+  assert.notEqual(adaptive.read('exList("A")[4].id'),'elev_lat_maq');
+  // Plateau detection requires three complete, comparable normal-recovery exposures and RIR.
+  adaptive.read(`S.drafts={};S.history=Array.from({length:3},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'sup_incl_maq',rir:2,sets:Array.from({length:4},()=>({kg:20,r:8}))}]}))`);
+  assert.equal(adaptive.read('variantChoice("A",0).changed'),true);
+  adaptive.read('S.history[2].readiness="tired"');
+  assert.equal(adaptive.read('variantChoice("A",0).changed'),undefined);
+  // Effort and drafts survive save/reload/edit, and failure does not recommend more load.
+  const effort=app();seedDraft(effort);const eid=effort.read('exList("A")[0].id');
+  effort.change({id:'readiness',value:'tired',dataset:{}});
+  effort.change({id:'',value:'0',dataset:{rir:eid}});
+  assert.equal(effort.read(`coachPlan(exList('A')[0],null,false,2,[{kg:20,r:20,done:true}])[1].kg`),20);
+  assert.equal(effort.read(`saveWorkout('A')`),true);
+  assert.equal(effort.read('S.history[0].ex[0].rir'),0);
+  assert.equal(effort.read('S.history[0].readiness'),'tired');
+  const effortReload=app(effort.storage);effortReload.click('edit-saved',{code:'A'});
+  assert.equal(effortReload.read('S.drafts.A.rir[exList("A")[0].id]'),0);
+  assert.equal(effortReload.read('S.drafts.A.readiness'),'tired');
+  const notLost=effortReload.read('JSON.stringify(S.drafts.A.v)');effortReload.click('variant',{slot:'0'});
+  assert.equal(effortReload.read('JSON.stringify(S.drafts.A.v)'),notLost);
+  effortReload.change({id:'readiness',value:'pain',dataset:{}});
+  assert.equal(effortReload.read(`coachPlan(exList('A')[0],sugg(exList('A')[0]),false,2,[]).every(x=>x===null)`),true);
+  const progress=app();progress.read(`S.logs.sup_incl_maq=[{d:'2026-10-26',rir:2,sets:Array.from({length:4},()=>({kg:20,r:10}))}]`);
+  assert.equal(progress.read('sugg(exList("A")[0]).hit'),true);
+  progress.read('S.logs.sup_incl_maq[0].rir=0');assert.equal(progress.read('sugg(exList("A")[0]).hit'),false);
+  // Nutrition reviews need repeat measurements, adherence, a bounded step and a 14-day cooldown.
+  const food=app();assert.equal(food.read('nutritionReview().delta'),0);
+  food.read(`S.weights=['2026-10-12','2026-10-14','2026-10-17','2026-10-20','2026-10-23','2026-10-25','2026-10-27'].map(d=>({d,kg:86}));S.profile.goal='ganhar'`);
+  assert.equal(food.read('nutritionReview().delta'),150);
+  food.nodes.set('#food-adherence',{checked:false});food.click('nutrition-apply');assert.equal(food.read('S.adj'),0);
+  food.nodes.set('#food-adherence',{checked:true});food.click('nutrition-apply');assert.equal(food.read('S.adj'),150);
+  assert.equal(food.read('nutritionReview().delta'),0);food.click('nutrition-apply');assert.equal(food.read('S.adj'),150);
+  assert.equal(app(food.storage).read('nutritionReview().delta'),0);
+  food.read('S.nutrition={};S.adj=600');assert.equal(food.read('nutritionReview().delta'),0);
+  food.read('S.adj=0;S.weights=S.weights.slice(-3)');assert.equal(food.read('nutritionReview().delta'),0);
+  console.log('PASS: adaptive exposure blocks, pinned machines, comparable plateaus, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
