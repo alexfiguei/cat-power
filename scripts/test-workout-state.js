@@ -12,13 +12,14 @@ class TestDate extends Date {
 function app(storage = new Map(), flavor = 'cat') {
   const nodes = new Map(), listeners = {};
   const node = selector => {
-    if (!nodes.has(selector)) nodes.set(selector, { innerHTML: '', textContent: '', hidden: true, style: {}, classList: { add() {}, remove() {} } });
+    if (!nodes.has(selector)) nodes.set(selector, { innerHTML: '', textContent: '', hidden: true, style: {}, classList: { add() {}, remove() {} }, setAttribute(name,value) { this[name]=value; }, showModal() { this.open=true; }, close() { this.open=false; } });
     return nodes.get(selector);
   };
-  const control = { failStore: false, records: [], error: null, queries: [], availability: 0 };
+  const control = { failStore: false, records: [], error: null, queries: [], availability: 0, energy: {}, energyQueries: [], energyErrors: [] };
   const plugin = {
     async isHealthAvailable() { control.availability++; return { available: true }; },
-    async queryWorkouts(query) { control.queries.push(query); if (control.error) throw control.error; return { workouts: control.records }; }
+    async queryWorkouts(query) { control.queries.push(query); if (control.error) throw control.error; return { workouts: control.records }; },
+    async queryAggregated(query) { control.energyQueries.push(query); if(control.energyErrors.includes(query.dataType))throw Error('permission denied');const value=control.energy[query.dataType]; return { aggregatedData: value==null?[]:[{value}] }; }
   };
   const context = {
     FLAV: flavor, APPNAME: 'Cat Power', Date: TestDate, console,
@@ -31,7 +32,8 @@ function app(storage = new Map(), flavor = 'cat') {
   context.window = context;
   vm.createContext(context); vm.runInContext(source, context);
   return { control, storage, nodes, read: code => vm.runInContext(code, context),
-    click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })) };
+    click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })),
+    input: target => listeners.input.forEach(cb => cb({target})) };
 }
 function seedDraft(a) {
   a.read(`ui.code='A'; S.setup=true; const ex=exList('A')[0]; S.drafts.A={date:TODAY,t0:Date.parse('2026-10-27T20:00:00Z'),v:{[ex.id]:[{kg:20,r:10,done:true},{kg:22.5,r:8,done:true}]}}; save()`);
@@ -157,5 +159,55 @@ function workout(id = 'strength', overrides = {}) {
   for (const id of JSON.parse(month.read('JSON.stringify(Object.keys(EXN))'))) {
     for (const position of [0, 1]) assert(fs.existsSync(`img/${id}_${position}.jpg`), `Exercise image missing: ${id}_${position}`);
   }
-  console.log('PASS: saved workout persistence; monthly Health Connect import with correct dates and no duplicates; linked sessions; both profiles; image matching and explicit association; storage/permission failures; DST. Health Connect responses are mocked.');
+  const rotation=app();
+  rotation.read(`S.sessions=[{d:TODAY,code:'D'}];S.history=[mkHist('2026-10-25','A',[],1,2),mkHist('2026-10-24','D',[],1,2)]`);
+  assert.equal(rotation.read('suggested()'), 'B');
+  rotation.click('code',{c:'D'});assert.equal(rotation.read('nextCode()'), 'B');
+  rotation.read(`S.history.push(mkHist(TODAY,'B',[],Date.now()-3600000,Date.now()-1))`);
+  assert.equal(rotation.read('suggested()'), 'C');
+  rotation.read(`S.history.push({...mkHist(TODAY,null,[],Date.now()-1000,Date.now()),source:'watch',watch:{id:'unknown',type:'STRENGTH_TRAINING',title:'Musculação'}})`);
+  assert.equal(rotation.read('suggested()'), null);
+  assert.match(rotation.read('recommendationCard()'), /Falta identificar o último treino/);
+  rotation.nodes.set('#classify', {value:'C'});
+  rotation.click('rotation-save',{select:'classify',record:encodeURIComponent('watch:unknown')});
+  assert.equal(rotation.read('suggested()'), 'D');
+  assert.equal(rotation.read('S.history.at(-1).ex.length'),0);
+  rotation.read(`S.history.push({...mkHist(TODAY,null,[],Date.now()-1,Date.now()),source:'watch',watch:{id:'walk',type:'WALKING'}})`);
+  assert.equal(rotation.read('suggested()'),'D');
+  rotation.read(`S.history=S.history.filter(h=>h.watch?.id!=='unknown')`);
+  assert.equal(rotation.read('suggested()'),'C');
+  rotation.read(`S.history=[{...mkHist(TODAY,null,[],Date.now()-1000,Date.now()),source:'watch',watch:{id:'named',type:'STRENGTH_TRAINING',title:'Treino D'}}]`);
+  assert.equal(rotation.read('suggested()'),'A');
+  rotation.read(`S.history[0].rotationCode='none'`);assert.equal(rotation.read('trainingHistory().length'),0);
+  rotation.read(`S.history=[mkHist(TODAY,'C',[],Date.now()-3000,Date.now()-2000),mkHist(TODAY,'A',[],Date.now()-5000,Date.now()-4000)]`);
+  assert.equal(rotation.read('suggested()'),'D');
+  const report=app();report.read('S.hc={on:true,hr:true}');
+  report.control.energy={'active-calories':629,'total-calories':629};
+  report.control.records=[workout('report',{startDate:'2026-10-27T19:00:00Z',endDate:'2026-10-27T20:16:53Z',duration:4613,heartRate:[{timestamp:'2026-10-27T19:00:00Z',bpm:85},{timestamp:'2026-10-27T19:15:00Z',bpm:110},{timestamp:'2026-10-27T19:30:00Z',bpm:125},{timestamp:'2026-10-27T20:00:00Z',bpm:169},{timestamp:'2026-10-27T20:16:53Z',bpm:136},{timestamp:'2026-10-27T18:00:00Z',bpm:999}]})];
+  await report.read('syncWatch(TODAY,false)');
+  assert.equal(report.read('S.history[0].watch.durationSec'),4613);
+  assert.equal(report.read('S.history[0].watch.hrAvg'),125);
+  assert.equal(report.read('S.history[0].watch.hrMax'),169);
+  assert.equal(report.read('S.history[0].watch.hr.length'),5);
+  assert.match(report.read('watchDetails(S.history[0],0)'),/1:16:53/);
+  assert.match(report.read('watchDetails(S.history[0],0)'),/629/);
+  assert.match(report.read('heartChart(S.history[0],"qa")'),/<path d="M/);
+  assert.doesNotMatch(report.read('heartChart(S.history[0],"qa")'),/NaN|undefined/);
+  assert.deepEqual(Array.from(report.control.energyQueries[0].dataOrigins),['com.sec.android.app.shealth']);
+  report.input({dataset:{hrRecord:encodeURIComponent('watch:com.sec.android.app.shealth:report'),output:'sample-output',cursor:'sample-cursor',duration:'4613'},value:'3'});
+  assert.equal(report.nodes.get('#sample-output').textContent,'1:00:00 · 169 bpm');
+  const dense=report.read('compactHeartRate(Array.from({length:24000},(_,i)=>[i,i===11111?200:100]),1800)');
+  assert(dense.length<=1800);assert(dense.some(p=>p[1]===200));assert.equal(dense[0][0],0);assert.equal(dense.at(-1)[0],23999);
+  report.control.energyErrors=['active-calories'];await report.read('syncWatch(TODAY,false)');
+  assert.equal(report.read('S.history[0].watch.activeKcal'),629);
+  assert.equal(report.read('S.history[0].watch.totalKcal'),629);
+  const missing=app();missing.read('S.hc={on:true,hr:false}');missing.control.records=[workout('missing',{heartRate:[]})];await missing.read('syncWatch(TODAY,false)');
+  assert.equal(missing.read('S.history[0].watch.activeKcal'),null);assert.equal(missing.read('S.history[0].watch.totalKcal'),null);
+  assert.match(missing.read('watchDetails(S.history[0],0)'),/não disponibilizou uma série de leituras/);
+  report.click('photo-open',{ex:'sup_incl',pos:'0'});assert.equal(report.nodes.get('#photo-dialog').open,true);
+  assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_0.jpg');
+  report.click('photo-more');assert.equal(report.nodes.get('#photo-large').style.width,'150%');
+  report.click('photo-next');assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_1.jpg');
+  report.click('photo-close');assert.equal(report.nodes.get('#photo-dialog').open,false);
+  console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

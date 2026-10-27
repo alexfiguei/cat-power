@@ -74,6 +74,25 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .pics{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .pics figure{margin:0;position:relative;border-radius:10px;overflow:hidden;background:var(--soft);aspect-ratio:3/2;max-width:100%}
 .pics img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-open{display:block;width:100%;height:100%;padding:0;border:0;background:var(--soft)}
+.pics figcaption{pointer-events:none}
+.photo-dialog{width:calc(100% - 24px);max-width:960px;max-height:94dvh;border:0;border-radius:16px;padding:14px;color:var(--ink);background:var(--surface)}
+.photo-dialog::backdrop{background:#000d}
+.photo-tools{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px}
+.photo-tools button{border:1px solid var(--line);background:var(--surface);border-radius:9px;padding:9px 14px;min-width:44px}
+.photo-stage{max-height:72dvh;overflow:auto;overscroll-behavior:contain;touch-action:pan-x pan-y pinch-zoom;background:var(--soft);border-radius:10px}
+.photo-stage img{display:block;width:100%;max-width:none;height:auto;margin:auto;object-fit:contain}
+.rotation-select{width:100%;padding:10px;border:1px solid var(--line);border-radius:10px;font:inherit;background:var(--surface);color:var(--ink)}
+.watch-report{background:#171719;color:#f5f5f7;padding:16px;border-radius:16px;margin-top:12px}
+.report-metrics{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.report-metric{border:1px solid #3b3b40;border-radius:14px;padding:14px 10px;text-align:center;min-width:0}
+.report-metric span{display:block;font-size:.9rem;line-height:1.25;margin-bottom:10px;color:#b79be5}
+.report-metric:first-child span{color:#43c1df}.report-metric.heart span{color:#ef638f}
+.report-metric b{font-size:1.85rem;font-weight:500;font-variant-numeric:tabular-nums;line-height:1.1}
+.report-metric small{font-size:.8rem;color:#b4b4bd;margin-left:3px}
+.heart-chart{margin-top:20px}.heart-chart h3{color:#f5f5f7;margin-bottom:8px}.heart-chart svg{display:block;width:100%;height:auto}
+.heart-chart input[type=range]{width:100%;accent-color:#f2ac3d;margin-top:10px}.heart-chart output{display:block;font-size:.95rem;color:#e4e4e8;margin-top:7px}
+.watch-report .missing{color:#b4b4bd;font-size:.88rem;margin-top:12px;line-height:1.45}
 .pics figcaption{position:absolute;left:6px;top:6px;background:rgba(21,32,42,.82);color:#fff;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:6px}
 .vid{font-size:.9rem;font-weight:600;color:var(--blue)}
 .codebtn.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
@@ -225,6 +244,12 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
   <button data-tab="refeicoes"><svg viewBox="0 0 24 24"><path d="M6 3v7a2 2 0 0 0 4 0V3M8 10v11M17 3c-2 0-3 2.5-3 5.5S15 13 17 13v8"/></svg>Refeições</button>
   <button data-tab="eu"><svg viewBox="0 0 24 24"><circle cx="12" cy="8" r="4"/><path d="M4 21c1.5-4 4.5-6 8-6s6.5 2 8 6"/></svg>Eu</button>
 </div></nav>
+
+<dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
+ <div class="photo-tools"><h2 id="photo-title"></h2><button data-act="photo-close" aria-label="Fechar fotografia">✕</button></div>
+ <div class="photo-stage"><img id="photo-large" alt=""></div>
+ <div class="photo-tools" style="margin-top:12px"><button data-act="photo-prev">← Início</button><span id="photo-position"></span><button data-act="photo-next">Fim →</button><button data-act="photo-less" aria-label="Reduzir fotografia">−</button><button data-act="photo-more" aria-label="Aumentar fotografia">+</button></div>
+</dialog>
 
 <script>
 /* ---------- DADOS DO PLANO ---------- */
@@ -572,10 +597,20 @@ const hhmm=t=>{const x=new Date(t);return `${pad(x.getHours())}:${pad(x.getMinut
 const TABS=['hoje','historico','plano','refeicoes','eu'];
 const ORDER=['A','B','C','D'];
 const after=c=>ORDER[(ORDER.indexOf(c)+1)%ORDER.length];
-function todayCode(){const t=S.sessions.find(x=>x.d===TODAY);return t?t.code:null}
-function suggested(){const prev=S.sessions.filter(x=>x.d<TODAY);return prev.length?after(prev[prev.length-1].code):ORDER[0]}
-function nextCode(){return after(todayCode()||ui.code)}
-const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false};ui.code=todayCode()||Object.keys(S.drafts).find(c=>S.drafts[c].date===TODAY)||suggested();
+function rotationCode(h){if(ORDER.includes(h.code))return h.code;if(h.rotationCode==='none')return null;if(ORDER.includes(h.rotationCode))return h.rotationCode;
+ const title=plainName(h.watch&&h.watch.title),explicit=title.match(/^treino ([abcd])(?: |$)/);if(explicit)return explicit[1].toUpperCase();
+ const matches=ORDER.filter(c=>title&&title===plainName(SESS[c].name));return matches.length===1?matches[0]:null;
+}
+function trainingHistory(){return S.history.filter(h=>h.d<=TODAY&&(!h.t1||h.t1<=Date.now())&&h.rotationCode!=='none'&&(rotationCode(h)||(h.watch&&strengthWatch(h.watch)))).sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0));}
+function nextTrainingInfo(){const last=trainingHistory().slice(-1)[0];if(!last)return{code:ORDER[0],last:null};const code=rotationCode(last);return{code:code?after(code):null,last};}
+function suggested(){return nextTrainingInfo().code}
+function nextCode(){return suggested()}
+const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false,manualChoice:false};
+function refreshWorkoutSelection(){if(ui.editing||ui.manualChoice)return;
+ const active=Object.keys(S.drafts).find(c=>SESS[c]&&S.drafts[c].date===TODAY&&Object.values(S.drafts[c].v||{}).some(sets=>sets.some(s=>s&&(s.done||s.r>0||s.kg>0))));
+ const saved=S.history.filter(h=>h.d===TODAY&&h.source!=='watch'&&ORDER.includes(h.code)).sort((a,b)=>(a.t1||0)-(b.t1||0)).slice(-1)[0];
+ ui.code=active||(saved&&saved.code)||suggested();
+}
 function savedToday(code){return S.history.find(h=>h.d===TODAY&&h.code===code&&h.source!=='watch')}
 function saveWorkout(code){
  const d=S.drafts[code];if(!d||d.date!==TODAY){toast(savedToday(code)?'Treino já guardado com sucesso.':'Ainda não registaste nenhuma série');return false}
@@ -593,7 +628,7 @@ function saveWorkout(code){
  const watches=next.history.filter(h=>h.d===TODAY&&h.watch).map(h=>h.watch);if(next.watch[TODAY]&&next.watch[TODAY].id)watches.push(next.watch[TODAY]);
  mergeWatchRecords(next,TODAY,watches);delete next.drafts[code];
  if(!save(next))return false;
- ui.editing=false;clearInterval(T.id);T.id=null;$('#timer').hidden=true;render();window.scrollTo(0,0);toast('Treino guardado com sucesso ✓');return true;
+ ui.editing=false;ui.manualChoice=false;clearInterval(T.id);T.id=null;$('#timer').hidden=true;render();window.scrollTo(0,0);toast('Treino guardado com sucesso ✓');return true;
 }
 
 function goal(){return GOALS[S.profile.goal]||GOALS.ganhar}
@@ -634,7 +669,7 @@ const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
 
 /* ---------- HOJE ---------- */
-function pics(ex){return `<div class="pics"><figure><img src="img/${ex.id}_0.jpg" alt="${ex.n}: posição inicial" loading="lazy"><figcaption>Início</figcaption></figure><figure><img src="img/${ex.id}_1.jpg" alt="${ex.n}: posição final" loading="lazy"><figcaption>Fim</figcaption></figure></div>`}
+function pics(ex){return `<div class="pics">${[0,1].map(pos=>`<figure><button class="photo-open" data-act="photo-open" data-ex="${ex.id}" data-pos="${pos}" aria-label="Ampliar ${ex.n}, posição ${pos?'final':'inicial'}"><img src="img/${ex.id}_${pos}.jpg" alt="${ex.n}: posição ${pos?'final':'inicial'}" loading="lazy"></button><figcaption>${pos?'Fim':'Início'} · ampliar ⤢</figcaption></figure>`).join('')}</div>`}
 function vid(ex){return `<a class="vid" href="https://www.youtube.com/results?search_query=${encodeURIComponent(ex.n+' técnica')}" target="_blank" rel="noopener">Ver vídeo no YouTube ↗</a>`}
 /* ---------- RELÓGIO (Health Connect / Samsung Health) ---------- */
 const CAP=window.Capacitor;const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
@@ -655,23 +690,38 @@ async function hcConnect(){
   if(S.hc.on)await syncWatch(TODAY,false,30);
  }catch(e){toast('Não foi possível ligar: '+(e&&e.message?e.message:'erro'))}
 }
+function compactHeartRate(points,max=1800){if(points.length<=max)return points;const out=[points[0]],size=Math.ceil(points.length/Math.floor((max-2)/2));
+ for(let i=1;i<points.length-1;i+=size){const bucket=points.slice(i,Math.min(i+size,points.length-1));let lo=bucket[0],hi=bucket[0];bucket.forEach(p=>{if(p[1]<lo[1])lo=p;if(p[1]>hi[1])hi=p});[lo,hi].sort((a,b)=>a[0]-b[0]).forEach(p=>{if(out[out.length-1]!==p)out.push(p)})}out.push(points[points.length-1]);return out;
+}
+async function workoutEnergy(w){if(typeof HP.queryAggregated!=='function')return{activeKcal:null,totalKcal:null};
+ const request={startDate:w.startDate,endDate:w.endDate,bucket:'day',dataOrigins:w.sourceBundleId?[w.sourceBundleId]:[]};
+ const results=await Promise.allSettled(['active-calories','total-calories'].map(dataType=>HP.queryAggregated({...request,dataType})));
+ const sum=r=>{if(r.status!=='fulfilled')return null;const values=(r.value&&r.value.aggregatedData||[]).map(x=>x.value).filter(x=>Number.isFinite(x)&&x>=0);return values.length?Math.round(values.reduce((a,b)=>a+b,0)):null};
+ return{activeKcal:sum(results[0]),totalKcal:sum(results[1])};
+}
+async function mapLimited(items,limit,fn){const out=new Array(items.length);let next=0;await Promise.all(Array.from({length:Math.min(limit,items.length)},async()=>{while(next<items.length){const i=next++;out[i]=await fn(items[i])}}));return out;}
 async function fetchWatch(d,days=1){
  await hcReady();
  const start=new Date(d+'T00:00:00'),end=new Date(start);end.setDate(end.getDate()+1);start.setDate(start.getDate()-days+1);
  const res=await HP.queryWorkouts({startDate:start.toISOString(),endDate:end.toISOString(),includeHeartRate:!!S.hc.hr,includeRoute:false,includeSteps:false});
- return ((res&&res.workouts)||[]).map(w=>{
-  const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate);if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<=t0||t1>Date.now()||t0<start.getTime()||t0>=end.getTime())return null;
-  const hr=(w.heartRate||[]).map(x=>x.bpm).filter(x=>Number.isFinite(x)&&x>0);
+ const workouts=((res&&res.workouts)||[]).filter(w=>{const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate);return Number.isFinite(t0)&&Number.isFinite(t1)&&t1>t0&&t1<=Date.now()&&t0>=start.getTime()&&t0<end.getTime()});
+ const normalised=await mapLimited(workouts,3,async w=>{
+  const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate),durationSec=Math.round(w.duration>0?w.duration:(t1-t0)/1000),elapsedSec=Math.round((t1-t0)/1000);
+  const numeric=(w.heartRate||[]).filter(x=>Number.isFinite(x.bpm)&&x.bpm>0);
+  const points=numeric.map(x=>[(Date.parse(x.timestamp)-t0)/1000,x.bpm]).filter(p=>Number.isFinite(p[0])&&p[0]>=0&&p[0]<=elapsedSec).map(p=>[Math.round(p[0]),p[1]]).sort((a,b)=>a[0]-b[0]);
+  const hr=points.length?points.map(p=>p[1]):numeric.filter(x=>!x.timestamp).map(x=>x.bpm),energy=await workoutEnergy(w);
   return{id:String(w.sourceBundleId||'health-connect')+':'+String(w.id||[w.startDate,w.endDate,w.workoutType].join('|')),date:iso(new Date(t0)),start:w.startDate,end:w.endDate,title:typeof w.title==='string'?w.title.slice(0,200):'',
-   dur:Math.max(1,Math.round((w.duration>0?w.duration:(t1-t0)/1000)/60)),kcal:Number.isFinite(w.calories)&&w.calories>=0?Math.round(w.calories):null,
-   hrAvg:hr.length?Math.round(hr.reduce((a,b)=>a+b,0)/hr.length):null,hrMax:hr.length?Math.max(...hr):null,type:w.workoutType||'',source:w.sourceBundleId||''};
- }).filter(Boolean).sort((a,b)=>a.start.localeCompare(b.start));
+   dur:Math.max(1,Math.round(durationSec/60)),durationSec,elapsedSec,...energy,kcal:energy.totalKcal??energy.activeKcal??(Number.isFinite(w.calories)&&w.calories>=0?Math.round(w.calories):null),
+   hrAvg:hr.length?Math.round(hr.reduce((a,b)=>a+b,0)/hr.length):null,hrMax:hr.length?hr.reduce((a,b)=>Math.max(a,b),0):null,hr:compactHeartRate(points),type:w.workoutType||'',source:w.sourceBundleId||''};
+ });
+ return normalised.sort((a,b)=>a.start.localeCompare(b.start));
 }
-const strengthWatch=w=>/STRENGTH|WEIGHT|CALISTHENICS|CIRCUIT/.test(w.type||'');
+const strengthWatch=w=>/STRENGTH|WEIGHT|CALISTHENICS|CIRCUIT/.test(w.type||'')||(/OTHER/.test(w.type||'')&&(/musculacao|treino de forca|strength|weight|treino [abcd](?: |$)/.test(plainName(w.title))||Object.values(EXN).some(n=>plainName(n)===plainName(w.title))));
 function mergeWatchRecords(next,d,workouts){
  let imported=0,linked=0;const seen=new Set();
  workouts.forEach(w=>{if(!w.id||seen.has(w.id))return;seen.add(w.id);
   const existing=next.history.find(h=>h.watch&&h.watch.id===w.id),t0=Date.parse(w.start),t1=Date.parse(w.end);
+  if(existing&&existing.watch&&existing.watch.start===w.start&&existing.watch.end===w.end){const old=existing.watch;['kcal','activeKcal','totalKcal','hrAvg','hrMax'].forEach(k=>{if(w[k]==null&&old[k]!=null)w[k]=old[k]});if((!w.hr||!w.hr.length)&&old.hr&&old.hr.length)w.hr=old.hr;}
   const matches=strengthWatch(w)?next.history.filter(h=>h.d===d&&h.source!=='watch'&&h.t0&&h.t1&&(!h.watch||h.watch.id===w.id)).map(h=>({h,overlap:Math.min(h.t1,t1)-Math.max(h.t0,t0)})).filter(x=>x.overlap>0).sort((a,b)=>b.overlap-a.overlap):[];
   const target=existing&&existing.source!=='watch'?existing:matches[0]?.h;
   if(target){target.watch=w;if(existing&&existing!==target){target.imageExerciseIds=[...new Set([...(target.imageExerciseIds||[]),...(existing.imageExerciseIds||[])])];next.history=next.history.filter(h=>h!==existing);}linked++;}
@@ -687,7 +737,7 @@ async function syncWatch(d,quiet,days=30){
  if(HC_BUSY){if(!quiet)toast('A importar os registos do relógio…');return}HC_BUSY=true;render();
  try{const workouts=await fetchWatch(d,days),next=JSON.parse(JSON.stringify(S));let imported=0,linked=0;
   const dates=[...new Set(workouts.map(w=>w.date))];dates.forEach(date=>{const r=mergeWatchRecords(next,date,workouts.filter(w=>w.date===date));imported+=r.imported;linked+=r.linked;});
-  if(days===30)next.hc.monthImported=true;
+  if(days===30){next.hc.monthImported=true;next.hc.detailVersion=2;}
   next.hc.lastImport={at:Date.now(),days,found:workouts.length,imported,linked};if(!save(next))return;
   if(!quiet){if(workouts.length){ui.tab='historico';toast(imported?`${imported} treino${imported>1?'s':''} do relógio importado${imported>1?'s':''} para o Histórico ✓`:'Registos do relógio atualizados no Histórico ✓');}
    else toast(`Não há treinos disponíveis nos últimos ${days} dias. Confirma a partilha do Samsung Health com o Health Connect.`);}
@@ -697,6 +747,22 @@ async function syncWatch(d,quiet,days=30){
 function watchType(w){return({STRENGTH_TRAINING:'Musculação',WEIGHTLIFTING:'Levantamento de pesos',WALKING:'Caminhada',RUNNING:'Corrida',CYCLING:'Ciclismo',CALISTHENICS:'Calistenia',SWIMMING_POOL:'Natação',OTHER:'Outro treino'})[w&&w.type]||'Treino'}
 function watchSyncButton(){return `<button class="btn ghost sm" data-act="watch" ${HC_BUSY?'disabled':''}>${HC_BUSY?'A importar…':'Importar último mês do relógio'}</button>`}
 function watchSyncStatus(){const r=S.hc.lastImport;return HC_BUSY?'<p class="muted" role="status">A ler os registos disponíveis. Aguarda a conclusão.</p>':r?`<p class="muted num" role="status" style="font-size:.9rem">Última leitura: ${dshort(iso(new Date(r.at)))} às ${hhmm(r.at)} · ${r.found} treino${r.found===1?'':'s'} encontrado${r.found===1?'':'s'} nos últimos ${r.days} dias · ${r.imported} novo${r.imported===1?'':'s'} no Histórico.</p>`:''}
+function clockText(seconds){const s=Math.max(0,Math.round(seconds||0)),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+':'+pad(m)+':'+pad(s%60):pad(m)+':'+pad(s%60)}
+function heartChart(h,id){const w=h.watch,points=w.hr||[];if(points.length<2)return '<div class="heart-chart"><h3>Gráfico da frequência cardíaca</h3><p class="missing">O Health Connect não disponibilizou uma série de leituras para esta sessão. Volta a importar com acesso à frequência cardíaca.</p></div>';
+ const duration=Math.max(w.elapsedSec||0,points[points.length-1][0],1),low=Math.max(0,Math.floor(points.reduce((a,p)=>Math.min(a,p[1]),Infinity)/10)*10-10),high=Math.ceil(points.reduce((a,p)=>Math.max(a,p[1]),0)/10)*10+10;
+ const X=t=>44+t/duration*576,Y=b=>240-(b-low)/(high-low)*210,intervals=points.slice(1).map((p,i)=>p[0]-points[i][0]).filter(x=>x>0).sort((a,b)=>a-b),gap=Math.max(30,(intervals[Math.floor(intervals.length/2)]||1)*5);
+ const path=points.map((p,i)=>(!i||p[0]-points[i-1][0]>gap?'M':'L')+X(p[0]).toFixed(1)+' '+Y(p[1]).toFixed(1)).join(' '),key=encodeURIComponent(historyKey(h));
+ return `<div class="heart-chart"><h3>Frequência cardíaca</h3><svg viewBox="0 0 640 290" role="img" aria-label="Frequência cardíaca ao longo do treino, em batimentos por minuto"><defs><linearGradient id="gradient-${id}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ef5145"/><stop offset=".35" stop-color="#efa039"/><stop offset=".6" stop-color="#eee447"/><stop offset=".82" stop-color="#68cf51"/><stop offset="1" stop-color="#47baf0"/></linearGradient></defs>
+ ${[low,Math.round((low+high)/2),high].map(b=>`<line x1="44" x2="620" y1="${Y(b)}" y2="${Y(b)}" stroke="#3a3a40" stroke-dasharray="3 5"/><text x="36" y="${Y(b)+4}" text-anchor="end" fill="#aaaab5" font-size="12">${b}</text>`).join('')}
+ <path d="${path}" fill="none" stroke="url(#gradient-${id})" stroke-width="2.3" stroke-linejoin="round" stroke-linecap="round"/><line id="cursor-${id}" x1="${X(points[0][0])}" x2="${X(points[0][0])}" y1="24" y2="240" stroke="#bbb" stroke-dasharray="3 4"/>
+ ${[0,.25,.5,.75,1].map((f,i)=>`<text x="${X(duration*f)}" y="270" text-anchor="${i===0?'start':i===4?'end':'middle'}" fill="#aaaab5" font-size="12">${clockText(duration*f)}</text>`).join('')}</svg>
+ <label for="scrub-${id}" style="font-size:.85rem;color:#c5c5ce">Desliza para ver uma leitura</label><input id="scrub-${id}" type="range" min="0" max="${points.length-1}" value="0" data-hr-record="${key}" data-output="output-${id}" data-cursor="cursor-${id}" data-duration="${duration}" aria-label="Consultar frequência cardíaca ao longo do treino"><output id="output-${id}">${clockText(points[0][0])} · ${points[0][1]} bpm</output></div>`;
+}
+function watchDetails(h,i){const w=h.watch;if(!w)return '';const exact=Number.isFinite(w.durationSec)?w.durationSec:Number.isFinite(Date.parse(w.end)-Date.parse(w.start))?(Date.parse(w.end)-Date.parse(w.start))/1000:null;
+ const metric=(label,value,unit,cls='')=>`<div class="report-metric ${cls}"><span>${label}</span><b>${value??'—'}</b>${value!=null&&unit?`<small>${unit}</small>`:''}</div>`;
+ return `<details style="margin-top:12px"><summary>Detalhes do treino e gráfico</summary><section class="watch-report"><div class="report-metrics">${metric('Duração total',exact!=null?clockText(exact):null,'')}${metric('Calorias em treino',w.activeKcal,'kcal')}${metric('Total de calorias',w.totalKcal,'kcal')}${metric('Freq. cardíaca média',w.hrAvg,'bpm','heart')}${metric('Freq. cardíaca máxima',w.hrMax,'bpm','heart')}</div>${heartChart(h,'report-'+i)}${w.activeKcal==null||w.totalKcal==null?'<p class="missing">— Informação não disponibilizada pelo Health Connect. As calorias em treino e o total são lidos separadamente.</p>':''}</section></details>`;
+}
+
 function watchCard(d){const w=S.watch[d];
  if(!w)return `<p class="muted" style="font-size:.92rem;margin-top:6px">Termina o treino no relógio (Exercício → Musculação) e toca em Atualizar.</p>`;
  return `<div class="watch num"><div><b>${w.dur}</b><small>min</small></div><div><b>${w.hrAvg??'—'}</b><small>FC média</small></div><div><b>${w.hrMax??'—'}</b><small>FC máx</small></div><div><b>${w.kcal??'—'}</b><small>kcal</small></div></div>`}
@@ -757,15 +823,16 @@ function savedWorkoutCard(h){const st=hStats(h);
 }
 function todayWatchCard(){return NATIVE&&S.hc.on?`<div class="card stack"><div class="ex-head"><h3>Relógio · hoje</h3>${watchSyncButton()}</div>${watchCard(TODAY)}${watchSyncStatus()}</div>`:''}
 function vHoje(){
- const wk=cycleWeek(),deload=wk===5,code=ui.code,nx=nextCode();
- const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${savedWorkoutCard(saved)}${todayWatchCard()}<div class="nextline"><span>Próximo treino</span><b>${nx} · ${SESS[nx].name}</b></div></div>`;
+ refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,nx=nextCode();
+ const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard()}</div>`;
  const completed=S.history.filter(x=>x.d<=TODAY),done=completed.length,last7=completed.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=[...completed].sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).slice(-1)[0];
  let h=`<div class="stack">
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
- <p class="eyebrow">Escolhe o treino de hoje · a app sabe o próximo</p>
- <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Hoje</small>':c===nx?'<small class="nx">Próxima</small>':''}</button>`).join('')}</div>
- <div class="nextline"><span>Próximo treino</span><b><i class="dot p-${SESS[nx].cls}"></i>${nx} · ${SESS[nx].name}</b></div>
+ <p class="eyebrow">Próximo treino pelo teu histórico</p>
+ <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Selecionado</small>':c===nx?'<small class="nx">Sugerido</small>':''}</button>`).join('')}</div>
+ ${recommendationCard()}
  <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: descarga.</b> Faz metade das séries com cerca de −10% do peso. É esta semana que as articulações recuperam e o músculo cresce.':`<b>Semana ${wk} de 5</b> · esforço: ${rirTxt(wk)}${wk===4?' (isolamento: 0–1)':''}${wk>=3?' · +1 série nos exercícios de isolamento':''}. Esta semana cada exercício muda de máquina ou forma de o fazer, para não ser repetitivo. Tenta bater a última vez que fizeste esta versão (+1 rep ou +peso).`}</div>`;
+ if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
  <div class="card stack"><div><p class="eyebrow">Fase 1 · 10–12 min</p><h3>Aquecimento e ativação</h3></div>
@@ -796,6 +863,15 @@ function records(){const R={};
 const plainName=s=>String(s||'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
 const safeText=s=>String(s||'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 function historyKey(h){return h.source==='watch'?'watch:'+h.watch.id:'session:'+h.d+':'+h.code}
+function rotationSelector(h,id){const selected=h.rotationCode==='none'?'none':rotationCode(h)||'';
+ return `<div class="stack" style="margin-top:12px"><label for="${id}">Que treino realizaste?</label><select class="rotation-select" id="${id}"><option value="">Selecionar o treino realizado</option>${ORDER.map(c=>`<option value="${c}" ${selected===c?'selected':''}>${c} · ${SESS[c].name}</option>`).join('')}<option value="none" ${selected==='none'?'selected':''}>Fora do plano · não altera a sequência</option></select><button class="btn ghost sm" data-act="rotation-save" data-record="${encodeURIComponent(historyKey(h))}" data-select="${id}">Confirmar treino realizado</button></div>`;
+}
+function recommendationCard(){const info=nextTrainingInfo();if(!info.code)return `<section class="card stack"><p class="pill warn">Falta identificar o último treino</p><h2>Acertar o próximo treino</h2><p>O relógio registou musculação a ${dshort(info.last.d)}. Indica qual dos treinos fizeste para atualizar a sequência.</p>${rotationSelector(info.last,'rotation-pending')}</section>`;
+ return `<section class="card stack"><p class="eyebrow">Próximo treino sugerido</p><h2>${info.code} · ${SESS[info.code].name}</h2><p class="muted">${info.last?`Com base no treino ${rotationCode(info.last)} realizado a ${dshort(info.last.d)}.`:'Primeira sessão: ainda não há um treino do plano identificado no histórico.'}</p><button class="btn ghost sm" data-act="next-workout">Ver próximo treino</button></section>`;
+}
+const PHOTO={id:null,pos:0,zoom:1};
+function updatePhoto(){const name=EXN[PHOTO.id];if(!name)return;const img=$('#photo-large');img.src=`img/${PHOTO.id}_${PHOTO.pos}.jpg`;img.alt=name+' — posição '+(PHOTO.pos?'final':'inicial');img.style.width=PHOTO.zoom*100+'%';$('#photo-title').textContent=name;$('#photo-position').textContent=PHOTO.pos?'Posição final':'Posição inicial';}
+function openPhoto(id,pos){if(!EXN[id])return;Object.assign(PHOTO,{id,pos:pos===1?1:0,zoom:1});updatePhoto();$('#photo-dialog').showModal();}
 function imageExerciseIds(h){const title=plainName(h.watch&&h.watch.title),named=title?Object.keys(EXN).filter(id=>plainName(EXN[id])===title):[];
  return [...new Set([...h.ex.map(e=>e.id),...(h.imageExerciseIds||[]),...(named.length===1?named:[])])].filter(id=>EXN[id]);
 }
@@ -824,7 +900,9 @@ function vHist(){
   ${x.watch&&x.watch.title?`<p class="muted" style="font-size:.9rem">${safeText(x.watch.title)}</p>`:''}
   ${st.hrAvg?`<p class="muted num" style="font-size:.9rem;margin-top:6px">Frequência cardíaca: média ${st.hrAvg}${st.hrMax?' · máxima '+st.hrMax:''} bpm</p>`:''}
   ${x.prs&&x.prs.length?`<div class="prs">${x.prs.map(p=>`<span class="pill ok">Recorde · ${EXN[p.id]}: ${fmt(p.kg)} kg</span>`).join('')}</div>`:''}
+  ${watchDetails(x,i)}
   ${historyImages(x,i)}
+  ${x.source==='watch'&&(strengthWatch(x.watch)||x.rotationCode)?rotationSelector(x,'rotation-'+i):''}
   <details style="margin-top:10px"><summary>${x.source==='watch'?'Dados do registo':'Exercícios ('+x.ex.length+')'}</summary><div style="margin-top:6px">${x.source==='watch'?'<p class="muted">Séries e cargas não foram registadas na app.</p>':x.ex.map(e=>`<div class="exrow num"><span>${EXN[e.id]||e.id}</span><span>${setsTxt(e.sets)}</span></div>`).join('')}</div>
   <button class="del" data-act="hdel" data-d="${x.d}" data-c="${x.code}" ${x.source==='watch'?'data-watch="'+encodeURIComponent(x.watch.id)+'"':''}>Apagar este treino</button></details></article>`});
  return h+`<p class="muted" style="font-size:.85rem">≈ estimativa: sem dados do relógio, o tempo vem da hora da 1.ª série até guardares e as calorias são calculadas pelo teu peso e pelo tempo.</p></div>`;
@@ -969,6 +1047,7 @@ function render(){
 function toast(m){const t=$('#toast');t.textContent=m;t.hidden=false;clearTimeout(toast.id);toast.id=setTimeout(()=>t.hidden=true,2200)}
 
 document.addEventListener('input',e=>{const el=e.target;
+ if(el.dataset.hrRecord){const h=S.history.find(x=>historyKey(x)===decodeURIComponent(el.dataset.hrRecord)),points=h&&h.watch&&h.watch.hr;if(!points||!points.length)return;const point=points[Math.max(0,Math.min(points.length-1,+el.value))];document.getElementById(el.dataset.output).textContent=clockText(point[0])+' · '+point[1]+' bpm';const line=document.getElementById(el.dataset.cursor),x=44+point[0]/(+el.dataset.duration||1)*576;line.setAttribute('x1',x);line.setAttribute('x2',x);return}
  if(el.dataset.ex){const d=draft(ui.code);if(!d.t0)d.t0=Date.now();const a=d.v[el.dataset.ex]=d.v[el.dataset.ex]||[];const k=+el.dataset.k;a[k]=a[k]||{};
   const v=el.dataset.f==='r'?parseInt(el.value,10):num(el.value);a[k][el.dataset.f]=isFinite(v)&&v!==null?v:null;save();return}
  if(el.id==='p-age'||el.id==='p-h'||el.id==='p-w'){let v=num(el.value);if(v===null)return;
@@ -984,12 +1063,19 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
 function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{const f=document.activeElement&&document.activeElement.id;render();if(f){const el=document.getElementById(f);if(el){el.focus();const l=el.value.length;try{el.setSelectionRange(l,l)}catch(e){}}}},700)}
 
 document.addEventListener('click',e=>{
+ if(e.target===$('#photo-dialog')){$('#photo-dialog').close();return}
  const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
- if(a==='code'){ui.code=b.dataset.c;ui.editing=false;render();toast(`Hoje: treino ${ui.code} · próximo: ${nextCode()}`)}
+ if(a==='code'){ui.code=b.dataset.c;ui.editing=false;ui.manualChoice=true;render();toast(`Plano ${ui.code} selecionado. A sequência só avança depois de um treino concluído.`)}
+ else if(a==='next-workout'){const code=suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
+ else if(a==='rotation-save'){const code=document.getElementById(b.dataset.select).value;if(!ORDER.includes(code)&&code!=='none'){toast('Indica o treino que realizaste');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.rotationCode=code;if(save(next)){ui.manualChoice=false;render();const n=nextCode();toast(n?`Próximo treino: ${n} · ${SESS[n].name}`:'Treino confirmado. Falta identificar a sessão mais recente.')}}
+ else if(a==='photo-open'){openPhoto(b.dataset.ex,+b.dataset.pos)}
+ else if(a==='photo-close'){$('#photo-dialog').close()}
+ else if(a==='photo-prev'||a==='photo-next'){PHOTO.pos=a==='photo-next'?1:0;PHOTO.zoom=1;updatePhoto()}
+ else if(a==='photo-more'||a==='photo-less'){PHOTO.zoom=Math.max(1,Math.min(3,PHOTO.zoom+(a==='photo-more'?.5:-.5)));updatePhoto()}
  else if(a==='image-add'){const id=document.getElementById(b.dataset.select).value;if(!EXN[id]){toast('Escolhe o exercício realizado');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.imageExerciseIds=[...new Set([...(h.imageExerciseIds||[]),id])];if(save(next)){render();toast('Imagem associada ao registo ✓')}}
  else if(a==='history'){ui.tab='historico';render();window.scrollTo(0,0)}
- else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;S.drafts[h.code]={date:TODAY,t0:h.t0,v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
+ else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
  else if(a==='done'){
   const code=ui.code;const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
   if(v.done){v.done=false;save();render();return}
@@ -1032,10 +1118,13 @@ function tick(){const left=Math.max(0,Math.ceil((T.end-Date.now())/1000));$('#t-
  $('#t-bar').style.transform=`scaleX(${T.total?left/T.total:0})`;
  if(left<=0&&T.id){clearInterval(T.id);T.id=null;$('#timer').classList.add('over');$('#t-label').textContent='Próxima série!';beep()}}
 
+document.addEventListener('keydown',e=>{if(!$('#photo-dialog').open)return;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){PHOTO.pos=e.key==='ArrowRight'?1:0;PHOTO.zoom=1;updatePhoto();e.preventDefault()}});
+document.addEventListener('dblclick',e=>{if(e.target.id==='photo-large'){PHOTO.zoom=PHOTO.zoom===1?2:1;updatePhoto()}});
+
 document.title=APPNAME;$('#appname').textContent=APPNAME;
 if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hidden=false;document.querySelector('.brand small').textContent='Treino e alimentação à tua medida'}
 render();
-function autoWatch(){if(NATIVE&&S.hc.on)syncWatch(TODAY,true,S.hc.monthImported?3:30)}
+function autoWatch(){if(NATIVE&&S.hc.on)syncWatch(TODAY,true,S.hc.monthImported&&S.hc.detailVersion===2?3:30)}
 autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
 </script>
 
