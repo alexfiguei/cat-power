@@ -23,7 +23,7 @@ function app(storage = new Map(), flavor = 'cat') {
   const context = {
     FLAV: flavor, APPNAME: 'Cat Power', Date: TestDate, console,
     location: { hash: '', search: '' },
-    document: { querySelector: node, querySelectorAll: () => [], addEventListener: (type, cb) => (listeners[type] ||= []).push(cb) },
+    document: { querySelector: node, getElementById: id => node('#'+id), querySelectorAll: () => [], addEventListener: (type, cb) => (listeners[type] ||= []).push(cb) },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => { if (control.failStore) throw Error('quota'); storage.set(key, value); } },
     Capacitor: { isNativePlatform: () => true, Plugins: { HealthPlugin: plugin } },
     setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, scrollTo() {},
@@ -90,14 +90,15 @@ function workout(id = 'strength', overrides = {}) {
     assert.equal(watch.read('hStats(S.history.find(h=>h.code==="A")).kcal'), 330);
     await watch.read('syncWatch(TODAY,false)');
     assert.equal(watch.read('S.history.length'), 2);
-    const before = watch.read('JSON.stringify(S)');
+    const before = watch.read('JSON.stringify({history:S.history,logs:S.logs,drafts:S.drafts,watch:S.watch})');
     watch.control.records = [];
     await watch.read('syncWatch(TODAY,false)');
-    assert.equal(watch.read('JSON.stringify(S)'), before);
+    assert.equal(watch.read('JSON.stringify({history:S.history,logs:S.logs,drafts:S.drafts,watch:S.watch})'), before);
+    assert.equal(watch.read('S.hc.lastImport.found'), 0);
     watch.control.error = Error('Health Connect permission denied');
     await watch.read('syncWatch(TODAY,false)');
     assert.equal(watch.read('HC_BUSY'), false);
-    assert.equal(watch.read('JSON.stringify(S)'), before);
+    assert.equal(watch.read('JSON.stringify({history:S.history,logs:S.logs,drafts:S.drafts,watch:S.watch})'), before);
   }
   const late = app(); seedDraft(late); late.read(`saveWorkout('A'); S.hc={on:true,hr:false}`);
   late.control.records = [workout()]; await late.read('syncWatch(TODAY,false)');
@@ -113,5 +114,42 @@ function workout(id = 'strength', overrides = {}) {
   await invalid.read(`fetchWatch('2026-10-25')`);
   const q = invalid.control.queries.at(-1);
   assert.equal(Date.parse(q.endDate) - Date.parse(q.startDate), 25 * 3600000);
-  console.log('PASS: completed workout survives reload, editing is explicit, failed saves keep drafts, watch import/merge is idempotent, both profiles, late metrics, multiple activities, permission/storage failures and DST. Health Connect responses are mocked.');
+  const month = app(); month.read('S.hc={on:true,hr:true}');
+  month.control.records = [
+    workout('first-day', { startDate: '2026-09-28T09:00:00+01:00', endDate: '2026-09-28T10:00:00+01:00', title: 'Supino inclinado com halteres' }),
+    workout('middle', { startDate: '2026-10-10T18:00:00+01:00', endDate: '2026-10-10T19:00:00+01:00' }),
+    workout('too-old', { startDate: '2026-09-27T23:00:00+01:00', endDate: '2026-09-27T23:30:00+01:00' }),
+    workout('today'),
+  ];
+  await month.read('syncWatch(TODAY,false)');
+  assert.equal(month.control.queries[0].startDate, '2026-09-27T23:00:00.000Z');
+  assert.equal(month.read('S.history.length'), 3);
+  assert.equal(month.read('S.hc.lastImport.imported'), 3);
+  assert.equal(month.read('ui.tab'), 'historico');
+  assert.equal(month.read('S.history[0].d'), '2026-09-28');
+  assert.equal(month.read('S.history[1].d'), '2026-10-10');
+  assert.equal(month.read('S.history[2].d'), '2026-10-27');
+  assert.equal(month.read('S.sessions.length'), 0);
+  assert.match(month.read('vHoje()'), /03<\/b><small>sessões feitas/);
+  assert.equal(month.read('imageExerciseIds(S.history[0])[0]'), 'sup_incl');
+  assert.equal(month.read('imageExerciseIds(S.history[1]).length'), 0);
+  assert.equal(month.read('S.history[0].ex.length'), 0);
+  assert.match(month.read('vHist()'), /img\/sup_incl_0.jpg/);
+  assert.match(month.read('vHist()'), /3 treinos encontrados nos últimos 30 dias/);
+  assert.match(month.read('vHist()'), /—<\/b><small>peso levantado/);
+  month.nodes.set('#chosen-image', { value: 'sup_incl' });
+  const key = month.read('encodeURIComponent(historyKey(S.history[1]))');
+  month.click('image-add', { select: 'chosen-image', record: key });
+  assert.equal(month.read('S.history[1].imageExerciseIds[0]'), 'sup_incl');
+  await month.read('syncWatch(TODAY,false)');
+  assert.equal(month.read('S.history.length'), 3);
+  assert.equal(month.read('S.hc.lastImport.imported'), 0);
+  assert.equal(month.read('S.history[1].imageExerciseIds[0]'), 'sup_incl');
+  month.control.records[0].title = '<img src=x onerror=alert(1)>';
+  await month.read('syncWatch(TODAY,false)');
+  assert.doesNotMatch(month.read('vHist()'), /<img src=x/);
+  for (const id of JSON.parse(month.read('JSON.stringify(Object.keys(EXN))'))) {
+    for (const position of [0, 1]) assert(fs.existsSync(`img/${id}_${position}.jpg`), `Exercise image missing: ${id}_${position}`);
+  }
+  console.log('PASS: saved workout persistence; monthly Health Connect import with correct dates and no duplicates; linked sessions; both profiles; image matching and explicit association; storage/permission failures; DST. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
