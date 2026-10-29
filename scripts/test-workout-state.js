@@ -36,7 +36,8 @@ function app(storage = new Map(), flavor = 'cat') {
   return { control, storage, nodes, read: code => vm.runInContext(code, context),
     click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })),
     input: target => listeners.input.forEach(cb => cb({target})),
-    change: target => listeners.change.forEach(cb => cb({target})) };
+    change: target => listeners.change.forEach(cb => cb({target})),
+    event: (kind, target) => (listeners[kind]||[]).forEach(cb => cb({target})) };
 }
 function seedDraft(a) {
   a.read(`ui.code='A'; S.setup=true; const ex=exList('A')[0]; S.drafts.A={date:TODAY,t0:Date.parse('2026-10-27T20:00:00Z'),v:{[ex.id]:[{kg:20,r:10,done:true},{kg:22.5,r:8,done:true}]}}; save()`);
@@ -303,7 +304,8 @@ function workout(id = 'strength', overrides = {}) {
   const zipApp=app();zipApp.read('S.setup=true');const zip=new (require('jszip'))();zip.file('Samsung Health/com.samsung.shealth.exercise.20261029.csv',csv);zip.file('Samsung Health/com.samsung.shealth.exercise.hr_zone.20261029.csv','irrelevant');const bytes=await zip.generateAsync({type:'uint8array'});zipApp.read(`globalThis.syntheticCsv=${JSON.stringify(csv)}`);zipApp.read(`globalThis.zipBytes=Uint8Array.from(${JSON.stringify(Array.from(bytes))})`);
   await zipApp.read(`selectSamsungFile({name:'export.csv',size:syntheticCsv.length,text:async()=>syntheticCsv})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW.workouts.length'),1);
   await zipApp.read(`selectSamsungFile({name:'export.zip',size:zipBytes.length,arrayBuffer:async()=>zipBytes})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW.workouts.length'),1);
-  await zipApp.read(`selectSamsungFile({name:'wrong.csv',size:10,text:async()=>'wrong,data'})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW'),null);
+  await zipApp.read(`selectSamsungFile({name:'wrong.csv',size:10,text:async()=>'wrong,data'})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW'),null);assert.match(zipApp.read('vHist()'),/Não foi encontrado o ficheiro/);
+  const picker=app();picker.read('S.hc={on:true,hr:false}');picker.event('click',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),true);const before=picker.nodes.get('#app').innerHTML;picker.read('autoWatch();render()');assert.equal(picker.control.queries.length,0);assert.equal(picker.nodes.get('#app').innerHTML,before);picker.event('cancel',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),false);
   console.log('PASS: Samsung CSV import, timezone, 30-day window, invalid rows, match and duplicate prevention. Synthetic data only.');
   console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
   console.log('PASS: adaptive exposure blocks, pinned machines, comparable plateaus, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');

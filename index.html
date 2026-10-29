@@ -772,7 +772,7 @@ async function syncWatch(d,quiet,days=30){
  finally{HC_BUSY=false;render()}
 }
 // Importação local do ficheiro exportado pelo Samsung Health.
-let SAMSUNG_PREVIEW=null;
+let SAMSUNG_PREVIEW=null,SAMSUNG_ERROR="",SAMSUNG_PICKER=false,SAMSUNG_LOADING=false;
 function samsungCsv(text){
  const rows=[];let row=[],cell='',quoted=false;
  for(let i=0;i<text.length;i++){const c=text[i];if(quoted){if(c==='"'&&text[i+1]==='"'){cell+='"';i++}else if(c==='"')quoted=false;else cell+=c}else if(c==='"'&&!cell)quoted=true;else if(c===','){row.push(cell);cell=''}else if(c==='\n'||c==='\r'){if(c==='\r'&&text[i+1]==='\n')i++;row.push(cell);rows.push(row);row=[];cell=''}else cell+=c}
@@ -798,11 +798,11 @@ function parseSamsung(text){
  }return{workouts:out.sort((a,b)=>a.start.localeCompare(b.start)),rejected};
 }
 async function selectSamsungFile(file){
- try{SAMSUNG_PREVIEW=null;if(!file||file.size>100*1024*1024)throw Error('Escolhe um ficheiro até 100 MB');let csv;
+ try{SAMSUNG_PICKER=false;SAMSUNG_PREVIEW=null;SAMSUNG_ERROR='';SAMSUNG_LOADING=true;render();if(!file||file.size>100*1024*1024)throw Error('Escolhe um ficheiro até 100 MB');let csv;
   if(/\.zip$/i.test(file.name)){if(typeof JSZip==='undefined')throw Error('Não foi possível abrir o ZIP');const zip=await JSZip.loadAsync(await file.arrayBuffer());const matches=Object.values(zip.files).filter(f=>!f.dir&&/^com\.samsung\.s?health\.exercise(?:\.\d+)?\.csv$/i.test(f.name.split('/').pop()));if(matches.length!==1)throw Error('O ZIP deve conter um único ficheiro de exercícios Samsung Health');const entry=matches[0];if(entry._data&&entry._data.uncompressedSize>20*1024*1024)throw Error('Ficheiro de exercícios demasiado grande');csv=await entry.async('string');}
   else if(/\.csv$/i.test(file.name)){if(file.size>20*1024*1024)throw Error('Ficheiro de exercícios demasiado grande');csv=await file.text();}else throw Error('Escolhe o ZIP ou o CSV de exercícios do Samsung Health');
-  const parsed=parseSamsung(csv);SAMSUNG_PREVIEW=parsed;render();if(!parsed.workouts.length)toast('Não foram encontrados treinos válidos nos últimos 30 dias');
- }catch(e){SAMSUNG_PREVIEW=null;render();toast(e.message||'Não foi possível ler o ficheiro')}
+  const parsed=parseSamsung(csv);SAMSUNG_PREVIEW=parsed;if(!parsed.workouts.length)SAMSUNG_ERROR='Não foram encontrados treinos válidos nos últimos 30 dias. Verifica se selecionaste o ficheiro de exercícios exportado pelo Samsung Health.';
+ }catch(e){SAMSUNG_PREVIEW=null;SAMSUNG_ERROR=e.message||'Não foi possível ler o ficheiro'}finally{SAMSUNG_LOADING=false;render()}
 }
 function importSamsung(){if(!SAMSUNG_PREVIEW||!SAMSUNG_PREVIEW.workouts.length)return;const next=JSON.parse(JSON.stringify(S));let imported=0,linked=0,skipped=0;
  for(const w of SAMSUNG_PREVIEW.workouts){const t0=Date.parse(w.start),t1=Date.parse(w.end);const exact=next.history.filter(h=>h.watch&&h.watch.id===w.id);if(exact.length){const r=mergeWatchRecords(next,w.date,[w]);imported+=r.imported;linked+=r.linked;continue}
@@ -810,7 +810,7 @@ function importSamsung(){if(!SAMSUNG_PREVIEW||!SAMSUNG_PREVIEW.workouts.length)r
   if(same.length){skipped++;continue}const r=mergeWatchRecords(next,w.date,[w]);imported+=r.imported;linked+=r.linked;
  }if(!save(next))return;SAMSUNG_PREVIEW=null;ui.tab='historico';render();toast(`${imported} novos · ${linked} associados · ${skipped} já existentes`);
 }
-function samsungImportCard(){const p=SAMSUNG_PREVIEW;return `<section class="card stack"><h3>Importar Samsung Health</h3><p class="muted">No Samsung Health, abre Definições → Transferir dados pessoais. Seleciona o ZIP ou o ficheiro CSV de exercícios. Os dados são lidos apenas neste telemóvel.</p><label class="btn ghost sm" for="samsung-file">Escolher ficheiro Samsung Health</label><input id="samsung-file" type="file" accept=".zip,.csv,application/zip,text/csv" style="max-width:100%">${p?`<p>${p.workouts.length} treinos válidos nos últimos 30 dias · ${p.rejected} linhas inválidas. As calorias e a frequência cardíaca aparecem quando disponíveis no ficheiro.</p>${p.workouts.length?'<button class="btn ghost sm" data-act="samsung-import">Confirmar importação</button>':''}`:''}</section>`}
+function samsungImportCard(){const p=SAMSUNG_PREVIEW;return `<section class="card stack"><h3>Importar Samsung Health</h3><p class="muted">No Samsung Health, abre Definições → Transferir dados pessoais e conclui a transferência. Seleciona o ZIP ou o CSV de exercícios na pasta Transferências / Samsung Health. Os dados são lidos neste telemóvel.</p><label class="btn ghost sm" for="samsung-file">Escolher ficheiro Samsung Health</label><input id="samsung-file" type="file" accept=".zip,.csv,application/zip,text/csv" style="max-width:100%">${SAMSUNG_LOADING?'<p role="status">A ler o ficheiro. Aguarda.</p>':''}${SAMSUNG_ERROR?`<p role="alert">${safeText(SAMSUNG_ERROR)}</p>`:''}${p?`<p role="status">${p.workouts.length} treinos válidos nos últimos 30 dias · ${p.rejected} linhas inválidas. As calorias e a frequência cardíaca aparecem quando disponíveis no ficheiro.</p>${p.workouts.length?'<button class="btn ghost sm" data-act="samsung-import">Confirmar importação</button>':''}`:''}</section>`}
 function watchType(w){return({STRENGTH_TRAINING:'Musculação',WEIGHTLIFTING:'Levantamento de pesos',WALKING:'Caminhada',RUNNING:'Corrida',CYCLING:'Ciclismo',CALISTHENICS:'Calistenia',SWIMMING_POOL:'Natação',OTHER:'Outro treino'})[w&&w.type]||'Treino'}
 function watchSyncButton(){return `<button class="btn ghost sm" data-act="watch" ${HC_BUSY?'disabled':''}>${HC_BUSY?'A importar…':'Importar último mês do relógio'}</button>`}
 function watchReadDetails(r){const d=r&&r.read;if(!d)return '';return `<details style="margin-top:10px"><summary>Diagnóstico da leitura</summary><p class="muted">Origem consultada: Health Connect no telemóvel. A Cat Power não consulta diretamente todo o histórico Samsung Health.</p><p class="num">Período: ${safeText(d.start)} → ${safeText(d.end)} (UTC)<br>Registos recebidos: ${d.received}<br>Datas inválidas: ${d.invalid} · Fim no futuro: ${d.unfinished} · Fora do período: ${d.outside}</p></details>`}
@@ -1145,6 +1145,7 @@ function vEu(){
 
 /* ---------- RENDER & EVENTOS ---------- */
 function render(){
+ if(SAMSUNG_PICKER)return;
  $('#app').innerHTML=!S.setup?vSetup():ui.tab==='hoje'?vHoje():ui.tab==='historico'?vHist():ui.tab==='plano'?vPlano():ui.tab==='refeicoes'?vRef():vEu();
  document.querySelectorAll('nav.tabs button').forEach(b=>b.setAttribute('aria-selected',b.dataset.tab===ui.tab));
 }
@@ -1170,6 +1171,7 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
 function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{const f=document.activeElement&&document.activeElement.id;render();if(f){const el=document.getElementById(f);if(el){el.focus();const l=el.value.length;try{el.setSelectionRange(l,l)}catch(e){}}}},700)}
 
 document.addEventListener('click',e=>{
+ if(e.target.id==='samsung-file'){SAMSUNG_PICKER=true;return}
  if(e.target===$('#photo-dialog')){$('#photo-dialog').close();return}
  const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
@@ -1240,7 +1242,8 @@ document.addEventListener('dblclick',e=>{if(e.target.id==='photo-large'){PHOTO.z
 document.title=APPNAME;$('#appname').textContent=APPNAME;
 if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hidden=false;document.querySelector('.brand small').textContent='Treino e alimentação à tua medida'}
 render();
-function autoWatch(){if(NATIVE&&S.hc.on)syncWatch(TODAY,true,S.hc.monthImported&&S.hc.detailVersion===2?3:30)}
+document.addEventListener('cancel',e=>{if(e.target.id==='samsung-file'){SAMSUNG_PICKER=false;render()}},true);
+function autoWatch(){if(!SAMSUNG_PICKER&&!SAMSUNG_LOADING&&NATIVE&&S.hc.on)syncWatch(TODAY,true,S.hc.monthImported&&S.hc.detailVersion===2?3:30)}
 autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
 </script>
 
