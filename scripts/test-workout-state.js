@@ -280,7 +280,12 @@ function workout(id = 'strength', overrides = {}) {
   revoked.control.requestedPermissions={READ_WORKOUTS:true,READ_HEART_RATE:false};revoked.control.records=[workout()];await revoked.read('syncWatch(TODAY,false)');assert.equal(revoked.read('S.history.length'),1);
   const hrFailure=app();hrFailure.read('S.setup=true;S.hc={on:true,hr:true}');hrFailure.control.hrError=Error('HR read failed');hrFailure.control.records=[workout()];
   await hrFailure.read('syncWatch(TODAY,false)');assert.equal(hrFailure.read('S.history.length'),1);assert.equal(hrFailure.control.queries.length,2);assert.equal(hrFailure.control.queries[1].includeHeartRate,false);assert.match(hrFailure.read('vHist()'),/sem frequência cardíaca/);
-  const empty=app();empty.read('S.setup=true;S.hc={on:true,hr:false}');await empty.read('syncWatch(TODAY,false)');assert.match(empty.read('vHoje()'),/Termina e guarda/);assert.equal(empty.read('!!S.hc.monthImported'),false);
+  const empty=app();empty.read('S.setup=true;S.hc={on:true,hr:false}');await empty.read('syncWatch(TODAY,false)');assert.match(empty.read('vHoje()'),/Isto não significa/);assert.equal(empty.read('!!S.hc.monthImported'),false);
+  assert.equal(empty.read('S.hc.lastImport.read.received'),0);
+  empty.control.records=[workout('bad-date',{startDate:'invalid'}),workout('future',{endDate:'2026-10-28T10:00:00Z'}),workout('old',{startDate:'2026-08-01T10:00:00Z',endDate:'2026-08-01T11:00:00Z'})];await empty.read('syncWatch(TODAY,false)');
+  assert.equal(empty.read('S.hc.lastImport.read.received'),3);assert.equal(empty.read('S.hc.lastImport.read.invalid'),1);assert.equal(empty.read('S.hc.lastImport.read.unfinished'),1);assert.equal(empty.read('S.hc.lastImport.read.outside'),1);
+  assert.match(empty.read('vHoje()'),/não os aceitou/);assert.doesNotMatch(empty.read('vHoje()'),/devolveu 0/);assert.match(empty.read('vHoje()'),/Registos recebidos: 3/);
+
   const exact=app();seedDraft(exact);exact.read('saveWorkout("A");S.hc={on:true,hr:false}');
   assert.equal(exact.read('hStats(S.history[0]).kcal'),null);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/Aguarda relógio/);
   exact.control.records=[workout('exact',{duration:3746,startDate:'2026-10-27T19:47:34Z',endDate:'2026-10-27T20:50:00Z',calories:520})];exact.control.energy={'active-calories':463,'total-calories':520};await exact.read('syncWatch(TODAY,false)');

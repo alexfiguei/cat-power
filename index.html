@@ -695,7 +695,7 @@ function vid(ex){return `<a class="vid" href="https://www.youtube.com/results?se
 const CAP=window.Capacitor;const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
 const HP=NATIVE?((CAP.Plugins&&CAP.Plugins.HealthPlugin)||(CAP.registerPlugin&&CAP.registerPlugin('HealthPlugin'))):null;
 const H_PERMS=['READ_WORKOUTS','READ_HEART_RATE','READ_TOTAL_CALORIES','READ_ACTIVE_CALORIES'];
-let HC_BUSY=false,HC_READY=null,HC_NOTICE='';
+let HC_BUSY=false,HC_READY=null,HC_NOTICE='',HC_READ=null;
 function healthCall(promise){return new Promise((resolve,reject)=>{const id=setTimeout(()=>reject(new Error('A leitura demorou demasiado. Abre o Samsung Health, confirma a sincronização e tenta novamente.')),45000);Promise.resolve(promise).then(v=>{clearTimeout(id);resolve(v)},e=>{clearTimeout(id);reject(e)})})}
 /* o plugin só cria a ligação ao Health Connect em isHealthAvailable: tem de correr sempre que a app abre */
 function hcReady(){if(!HC_READY)HC_READY=healthCall(HP.isHealthAvailable()).then(a=>{if(!a||!a.available){HC_READY=null;throw new Error('Health Connect indisponível')}return true}).catch(e=>{HC_READY=null;throw e});return HC_READY}
@@ -727,7 +727,8 @@ async function fetchWatch(d,days=1){
  const request={startDate:start.toISOString(),endDate:end.toISOString(),includeHeartRate:!!S.hc.hr,includeRoute:false,includeSteps:false};
  let res;try{res=await healthCall(HP.queryWorkouts(request))}catch(error){if(!request.includeHeartRate)throw error;res=await healthCall(HP.queryWorkouts({...request,includeHeartRate:false}));HC_NOTICE='Treinos lidos sem frequência cardíaca: essa leitura falhou. Podes rever as autorizações e voltar a importar.';}
  if(!res||!Array.isArray(res.workouts))throw new Error('O Health Connect devolveu uma resposta inválida. Volta a tentar.');
- const workouts=((res&&res.workouts)||[]).filter(w=>{const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate);return Number.isFinite(t0)&&Number.isFinite(t1)&&t1>t0&&t1<=Date.now()&&t0>=start.getTime()&&t0<end.getTime()});
+ HC_READ={start:start.toISOString(),end:end.toISOString(),received:res.workouts.length,invalid:0,unfinished:0,outside:0};
+ const workouts=res.workouts.filter(w=>{const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate);if(!Number.isFinite(t0)||!Number.isFinite(t1)||t1<=t0){HC_READ.invalid++;return false}if(t1>Date.now()){HC_READ.unfinished++;return false}if(t0<start.getTime()||t0>=end.getTime()){HC_READ.outside++;return false}return true});
  const normalised=await mapLimited(workouts,3,async w=>{
   const t0=Date.parse(w.startDate),t1=Date.parse(w.endDate),durationSec=Math.round(w.duration>0?w.duration:(t1-t0)/1000),elapsedSec=Math.round((t1-t0)/1000);
   const numeric=(w.heartRate||[]).filter(x=>Number.isFinite(x.bpm)&&x.bpm>0);
@@ -756,21 +757,22 @@ function mergeWatchRecords(next,d,workouts){
 }
 async function syncWatch(d,quiet,days=30){
  if(!HP){if(!quiet)toast('A ligação ao relógio funciona na app Android');return}
- if(HC_BUSY){if(!quiet)toast('A importar os registos do relógio…');return}HC_BUSY=true;HC_NOTICE='';render();
+ if(HC_BUSY){if(!quiet)toast('A importar os registos do relógio…');return}HC_BUSY=true;HC_NOTICE='';HC_READ=null;render();
  try{let allowed=await hcPermissions();if(!allowed&&!quiet)allowed=await hcPermissions(true);if(!allowed)throw new Error('Falta autorizar a leitura de Exercício. Toca em Rever autorizações.');
   const workouts=await fetchWatch(d,days),next=JSON.parse(JSON.stringify(S));let imported=0,linked=0;
   const dates=[...new Set(workouts.map(w=>w.date))];dates.forEach(date=>{const r=mergeWatchRecords(next,date,workouts.filter(w=>w.date===date));imported+=r.imported;linked+=r.linked;});
   if(days===30&&workouts.length){next.hc.monthImported=true;next.hc.detailVersion=2;}
-  next.hc.lastImport={at:Date.now(),days,found:workouts.length,imported,linked};if(!save(next))return;
+  next.hc.lastImport={at:Date.now(),days,found:workouts.length,imported,linked,read:HC_READ};if(!save(next))return;
   if(!quiet){if(workouts.length){ui.tab='historico';toast(imported?`${imported} treino${imported>1?'s':''} do relógio importado${imported>1?'s':''} para o Histórico ✓`:'Registos do relógio atualizados no Histórico ✓');}
-   else toast(`Não há treinos disponíveis nos últimos ${days} dias.`);}
-  if(!workouts.length)HC_NOTICE='Ainda não chegaram treinos do relógio. Termina e guarda o exercício no Watch, abre o Samsung Health no telemóvel e confirma que aparece no histórico. Em Samsung Health → Definições → Health Connect, permite partilhar Exercício. Depois volta a importar aqui.';
+   else toast('A Cat Power não importou registos nesta leitura. Consulta o diagnóstico abaixo.');}
+  if(!workouts.length)HC_NOTICE=HC_READ.received?'O Health Connect devolveu registos, mas a Cat Power não os aceitou para este período. Consulta as datas e os motivos no diagnóstico abaixo.':'O Health Connect devolveu 0 registos de exercício à Cat Power neste período. Isto não significa que não existam treinos no Samsung Health. Abre Health Connect → Dados e acesso → Atividade → Exercício para verificar se os registos estão partilhados. Nas permissões, verifica Samsung Health: escrever Exercício; Cat Power: ler Exercício.';
  }catch(e){HC_NOTICE='Erro a ler o relógio: '+(e&&e.message?e.message:'erro');HC_READY=null;if(!quiet)toast(HC_NOTICE)}
  finally{HC_BUSY=false;render()}
 }
 function watchType(w){return({STRENGTH_TRAINING:'Musculação',WEIGHTLIFTING:'Levantamento de pesos',WALKING:'Caminhada',RUNNING:'Corrida',CYCLING:'Ciclismo',CALISTHENICS:'Calistenia',SWIMMING_POOL:'Natação',OTHER:'Outro treino'})[w&&w.type]||'Treino'}
 function watchSyncButton(){return `<button class="btn ghost sm" data-act="watch" ${HC_BUSY?'disabled':''}>${HC_BUSY?'A importar…':'Importar último mês do relógio'}</button>`}
-function watchSyncStatus(){const r=S.hc.lastImport;if(HC_BUSY)return '<p class="muted" role="status">A ler os registos disponíveis. Aguarda a conclusão.</p>';const notice=HC_NOTICE?`<div class="card" role="status"><p>${safeText(HC_NOTICE)}</p><button class="btn ghost sm" data-act="hc">Rever autorizações</button> <button class="btn ghost sm" data-act="hc-settings">Abrir Health Connect</button></div>`:'';return notice+(r?`<p class="muted num" role="status" style="font-size:.9rem">Última leitura: ${dshort(iso(new Date(r.at)))} às ${hhmm(r.at)} · ${r.found} treino${r.found===1?'':'s'} encontrado${r.found===1?'':'s'} nos últimos ${r.days} dias · ${r.imported} novo${r.imported===1?'':'s'} no Histórico · ${r.linked} associado${r.linked===1?'':'s'} a treinos da app.</p>`:'')}
+function watchReadDetails(r){const d=r&&r.read;if(!d)return '';return `<details style="margin-top:10px"><summary>Diagnóstico da leitura</summary><p class="muted">Origem consultada: Health Connect no telemóvel. A Cat Power não consulta diretamente todo o histórico Samsung Health.</p><p class="num">Período: ${safeText(d.start)} → ${safeText(d.end)} (UTC)<br>Registos recebidos: ${d.received}<br>Datas inválidas: ${d.invalid} · Fim no futuro: ${d.unfinished} · Fora do período: ${d.outside}</p></details>`}
+function watchSyncStatus(){const r=S.hc.lastImport;if(HC_BUSY)return '<p class="muted" role="status">A ler os registos disponíveis. Aguarda a conclusão.</p>';const notice=HC_NOTICE?`<div class="card" role="status"><p>${safeText(HC_NOTICE)}</p><button class="btn ghost sm" data-act="hc">Rever autorizações</button> <button class="btn ghost sm" data-act="hc-settings">Abrir Health Connect</button></div>`:'';return notice+watchReadDetails(r)+(r?`<p class="muted num" role="status" style="font-size:.9rem">Última leitura: ${dshort(iso(new Date(r.at)))} às ${hhmm(r.at)} · ${r.found} treino${r.found===1?'':'s'} encontrado${r.found===1?'':'s'} nos últimos ${r.days} dias · ${r.imported} novo${r.imported===1?'':'s'} no Histórico · ${r.linked} associado${r.linked===1?'':'s'} a treinos da app.</p>`:'')}
 function clockText(seconds){const s=Math.max(0,Math.round(seconds||0)),h=Math.floor(s/3600),m=Math.floor(s%3600/60);return h?h+':'+pad(m)+':'+pad(s%60):pad(m)+':'+pad(s%60)}
 function heartChart(h,id){const w=h.watch,points=w.hr||[];if(points.length<2)return '<div class="heart-chart"><h3>Gráfico da frequência cardíaca</h3><p class="missing">O Health Connect não disponibilizou uma série de leituras para esta sessão. Volta a importar com acesso à frequência cardíaca.</p></div>';
  const duration=Math.max(w.elapsedSec||0,points[points.length-1][0],1),low=Math.max(0,Math.floor(points.reduce((a,p)=>Math.min(a,p[1]),Infinity)/10)*10-10),high=Math.ceil(points.reduce((a,p)=>Math.max(a,p[1]),0)/10)*10+10;
