@@ -17,8 +17,10 @@ function app(storage = new Map(), flavor = 'cat') {
   };
   const control = { failStore: false, records: [], error: null, queries: [], availability: 0, energy: {}, energyQueries: [], energyErrors: [] };
   const plugin = {
+    async checkHealthPermissions() { return {permissions: control.permissions || {READ_WORKOUTS:true,READ_HEART_RATE:vm.runInContext('!!S.hc.hr',context)}}; },
+    async requestHealthPermissions() { control.permissionRequests=(control.permissionRequests||0)+1;return {permissions:control.requestedPermissions||control.permissions||{READ_WORKOUTS:true,READ_HEART_RATE:false}}; },
     async isHealthAvailable() { control.availability++; return { available: true }; },
-    async queryWorkouts(query) { control.queries.push(query); if (control.error) throw control.error; return { workouts: control.records }; },
+    async queryWorkouts(query) { control.queries.push(query); if (control.error || (query.includeHeartRate&&control.hrError)) throw control.error||control.hrError; return { workouts: control.records }; },
     async queryAggregated(query) { control.energyQueries.push(query); if(control.energyErrors.includes(query.dataType))throw Error('permission denied');const value=control.energy[query.dataType]; return { aggregatedData: value==null?[]:[{value}] }; }
   };
   const context = {
@@ -259,6 +261,33 @@ function workout(id = 'strength', overrides = {}) {
   assert.equal(app(food.storage).read('nutritionReview().delta'),0);
   food.read('S.nutrition={};S.adj=600');assert.equal(food.read('nutritionReview().delta'),0);
   food.read('S.adj=0;S.weights=S.weights.slice(-3)');assert.equal(food.read('nutritionReview().delta'),0);
+  // Completing the final prescribed set stops rest, including reduced-volume plans and extra logged sets.
+  for(const flavor of ['cat','mary'])for(const mode of ['normal','tired','deload']){
+    const timer=app(new Map(),flavor);timer.read(`S.setup=true;ui.code='B';S.start=${mode==='deload'?"'2026-09-29'":"TODAY"};const d=draft('B');d.readiness='${mode==='tired'?'tired':'normal'}';exList('B').forEach(ex=>{d.v[ex.id]=Array.from({length:plannedSets(ex,d)},()=>({kg:15,r:12,done:true}))});const last=exList('B').at(-1);d.v[last.id].at(-1).done=false;save()`);
+    const id=timer.read('exList("B").at(-1).id'),k=timer.read('S.drafts.B.v[exList("B").at(-1).id].length-1');
+    timer.read('startTimer(60)');assert.equal(timer.nodes.get('#timer').hidden,false);
+    timer.click('done',{ex:id,k:String(k),rest:'60'});
+    assert.equal(timer.read('workoutComplete("B")'),true);assert.equal(timer.read('T.id'),null);assert.equal(timer.nodes.get('#timer').hidden,true);
+    assert.match(timer.nodes.get('#app').innerHTML,/Todas as séries concluídas/);
+    timer.read('tick()');assert.equal(timer.nodes.get('#timer').hidden,true);
+    timer.click('done',{ex:id,k:String(k),rest:'60'});assert.equal(timer.read('workoutComplete("B")'),false);
+    timer.read('startTimer(60)');assert.equal(timer.nodes.get('#timer').hidden,false);
+    timer.read('saveWorkout("B")');assert.equal(timer.nodes.get('#timer').hidden,true);assert.equal(timer.read('T.code'),null);
+  }
+  const revoked=app();revoked.read('S.setup=true;S.hc={on:true,hr:true}');revoked.control.permissions={READ_WORKOUTS:false};
+  await revoked.read('syncWatch(TODAY,false)');assert.equal(revoked.control.permissionRequests,1);assert.equal(revoked.control.queries.length,0);assert.equal(revoked.read('HC_BUSY'),false);
+  assert.match(revoked.read('vHoje()'),/Falta autorizar/);assert.match(revoked.read('vWatchEu()'),/Falta autorizar/);
+  revoked.control.requestedPermissions={READ_WORKOUTS:true,READ_HEART_RATE:false};revoked.control.records=[workout()];await revoked.read('syncWatch(TODAY,false)');assert.equal(revoked.read('S.history.length'),1);
+  const hrFailure=app();hrFailure.read('S.setup=true;S.hc={on:true,hr:true}');hrFailure.control.hrError=Error('HR read failed');hrFailure.control.records=[workout()];
+  await hrFailure.read('syncWatch(TODAY,false)');assert.equal(hrFailure.read('S.history.length'),1);assert.equal(hrFailure.control.queries.length,2);assert.equal(hrFailure.control.queries[1].includeHeartRate,false);assert.match(hrFailure.read('vHist()'),/sem frequência cardíaca/);
+  const empty=app();empty.read('S.setup=true;S.hc={on:true,hr:false}');await empty.read('syncWatch(TODAY,false)');assert.match(empty.read('vHoje()'),/Termina e guarda/);assert.equal(empty.read('!!S.hc.monthImported'),false);
+  const exact=app();seedDraft(exact);exact.read('saveWorkout("A");S.hc={on:true,hr:false}');
+  assert.equal(exact.read('hStats(S.history[0]).kcal'),null);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/Aguarda relógio/);
+  exact.control.records=[workout('exact',{duration:3746,startDate:'2026-10-27T19:47:34Z',endDate:'2026-10-27T20:50:00Z',calories:520})];exact.control.energy={'active-calories':463,'total-calories':520};await exact.read('syncWatch(TODAY,false)');
+  assert.equal(exact.read('S.history.length'),1);assert.equal(exact.read('hStats(S.history[0]).kcal'),463);assert.equal(exact.read('hStats(S.history[0]).durationSec'),3746);
+  assert.match(exact.read('savedWorkoutCard(S.history[0])'),/1:02:26/);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/463/);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/kcal ativas/);
+  assert.match(exact.read('watchDetails(S.history[0],0)'),/520/);
+  console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
   console.log('PASS: adaptive exposure blocks, pinned machines, comparable plateaus, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });
