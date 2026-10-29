@@ -1061,8 +1061,8 @@ function vWatchEu(){
    :`<p>Liga a app ao Samsung Health para juntar os dados do relógio a cada treino.</p><button class="btn sm" data-act="hc">Ligar ao Samsung Health</button>
      <p class="muted" style="font-size:.88rem">No Samsung Health ativa a partilha com o Health Connect: Samsung Health → ⋮ → Definições → Health Connect.</p>${watchSyncStatus()}`;
  }
- const rows=[...S.history].sort((a,b)=>(b.t1||Date.parse(b.d))-(a.t1||Date.parse(a.d))).slice(0,10).map(x=>{const w=x.watch||(S.watch[x.d]&&!S.watch[x.d].id?S.watch[x.d]:null),s=SESS[x.code];
-  return `<div class="hist-row num"><b>${dshort(x.d)}</b><span class="dot p-${s?s.cls:'none'}"></span><span>${x.source==='watch'?'Relógio':'Treino '+x.code}${w?` · ${w.dur} min${w.hrAvg?' · FC '+w.hrAvg:''}${w.kcal!=null?' · '+w.kcal+' kcal':''}`:''}</span></div>`}).join('');
+ const rows=[...S.history].sort((a,b)=>(b.t1||Date.parse(b.d))-(a.t1||Date.parse(a.d))).slice(0,10).map(x=>{const w=x.watch,st=hStats(x),s=SESS[x.code];
+  return `<div class="hist-row num"><b>${dshort(x.d)}</b><span class="dot p-${s?s.cls:'none'}"></span><span>${x.source==='watch'?'Relógio':'Treino '+x.code}${w?` · ${Number.isFinite(st.durationSec)?clockText(st.durationSec):w.dur+' min'}${w.hrAvg?' · FC '+w.hrAvg:''}${st.kcal!=null?' · '+st.kcal+' '+st.kcalLabel:''}`:''}</span></div>`}).join('');
  h+=rows?`<div><p class="eyebrow" style="margin-bottom:4px">Últimos treinos</p>${rows}</div>`:'';
  return h+'</div>'}
 function profForm(p){return `<div class="form">
