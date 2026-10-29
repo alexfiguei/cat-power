@@ -24,7 +24,7 @@ function app(storage = new Map(), flavor = 'cat') {
     async queryAggregated(query) { control.energyQueries.push(query); if(control.energyErrors.includes(query.dataType))throw Error('permission denied');const value=control.energy[query.dataType]; return { aggregatedData: value==null?[]:[{value}] }; }
   };
   const context = {
-    FLAV: flavor, APPNAME: 'Cat Power', Date: TestDate, console,
+    FLAV: flavor, APPNAME: 'Cat Power', Date: TestDate, console, JSZip: require('jszip'), Uint8Array, ArrayBuffer,
     location: { hash: '', search: '' },
     document: { querySelector: node, getElementById: id => node('#'+id), querySelectorAll: () => [], addEventListener: (type, cb) => (listeners[type] ||= []).push(cb) },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => { if (control.failStore) throw Error('quota'); storage.set(key, value); } },
@@ -206,7 +206,7 @@ function workout(id = 'strength', overrides = {}) {
   assert.equal(report.read('S.history[0].watch.totalKcal'),629);
   const missing=app();missing.read('S.hc={on:true,hr:false}');missing.control.records=[workout('missing',{heartRate:[]})];await missing.read('syncWatch(TODAY,false)');
   assert.equal(missing.read('S.history[0].watch.activeKcal'),null);assert.equal(missing.read('S.history[0].watch.totalKcal'),null);
-  assert.match(missing.read('watchDetails(S.history[0],0)'),/não disponibilizou uma série de leituras/);
+  assert.match(missing.read('watchDetails(S.history[0],0)'),/Não há leituras individuais/);
   report.click('photo-open',{ex:'sup_incl',pos:'0'});assert.equal(report.nodes.get('#photo-dialog').open,true);
   assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_0.jpg');
   report.click('photo-more');assert.equal(report.nodes.get('#photo-large').style.width,'150%');
@@ -292,6 +292,19 @@ function workout(id = 'strength', overrides = {}) {
   assert.equal(exact.read('S.history.length'),1);assert.equal(exact.read('hStats(S.history[0]).kcal'),463);assert.equal(exact.read('hStats(S.history[0]).durationSec'),3746);
   assert.match(exact.read('savedWorkoutCard(S.history[0])'),/1:02:26/);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/463/);assert.match(exact.read('savedWorkoutCard(S.history[0])'),/kcal ativas/);
   assert.match(exact.read('watchDetails(S.history[0],0)'),/520/);
+  const samsung=app();samsung.read('S.setup=true;S.hc.on=false');
+  const csv=['com.samsung.shealth.exercise,version', 'com.samsung.health.exercise.datauuid,com.samsung.health.exercise.start_time,com.samsung.health.exercise.end_time,com.samsung.health.exercise.time_offset,com.samsung.health.exercise.duration,com.samsung.health.exercise.exercise_type,total_calorie,com.samsung.health.exercise.mean_heart_rate,com.samsung.health.exercise.max_heart_rate', 'test-id,2026-10-27 19:47:34.000,2026-10-27 20:50:03.000,UTC+0000,3746000,15002,463,118,145','old-id,2026-08-01 10:00:00,2026-08-01 11:00:00,UTC+0100,3600000,15002,100,100,130','invalid,not-a-date,2026-10-27 20:50:03,UTC+0000,3746000,15002,100,100,130'].join('\n');
+  const result=samsung.read(`parseSamsung(${JSON.stringify(csv)})`);assert.equal(result.workouts.length,1);assert.equal(result.rejected,1);assert.equal(result.workouts[0].durationSec,3746);assert.equal(result.workouts[0].totalKcal,463);assert.equal(result.workouts[0].hrAvg,118);assert.equal(result.workouts[0].hrMax,145);assert.equal(result.workouts[0].start,'2026-10-27T19:47:34.000Z');
+  assert.equal(samsung.read(`samsungTime('2026-10-27 20:00:00','3600000')`),Date.parse('2026-10-27T19:00:00Z'));
+  seedDraft(samsung);samsung.read('saveWorkout("A")');samsung.read(`SAMSUNG_PREVIEW=parseSamsung(${JSON.stringify(csv)});importSamsung()`);assert.equal(samsung.read('S.history.length'),1);assert.equal(samsung.read('S.history[0].watch.kcal'),463);assert.equal(samsung.read('S.history[0].sets'),2);assert.match(samsung.read('savedWorkoutCard(S.history[0])'),/1:02:26/);
+  samsung.read(`SAMSUNG_PREVIEW=parseSamsung(${JSON.stringify(csv)});importSamsung()`);assert.equal(samsung.read('S.history.length'),1);
+  samsung.control.records=[workout('hc-id',{startDate:'2026-10-27T19:47:34Z',endDate:'2026-10-27T20:50:03Z',duration:3746})];samsung.read('S.hc={on:true,hr:false}');await samsung.read('syncWatch(TODAY,false)');assert.equal(samsung.read('S.history.length'),1);
+  assert.throws(()=>samsung.read(`parseSamsung('not,a,workout\\n1,2,3')`),/ficheiro de exercícios/);
+  const zipApp=app();zipApp.read('S.setup=true');const zip=new (require('jszip'))();zip.file('Samsung Health/com.samsung.shealth.exercise.20261029.csv',csv);zip.file('Samsung Health/com.samsung.shealth.exercise.hr_zone.20261029.csv','irrelevant');const bytes=await zip.generateAsync({type:'uint8array'});zipApp.read(`globalThis.syntheticCsv=${JSON.stringify(csv)}`);zipApp.read(`globalThis.zipBytes=Uint8Array.from(${JSON.stringify(Array.from(bytes))})`);
+  await zipApp.read(`selectSamsungFile({name:'export.csv',size:syntheticCsv.length,text:async()=>syntheticCsv})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW.workouts.length'),1);
+  await zipApp.read(`selectSamsungFile({name:'export.zip',size:zipBytes.length,arrayBuffer:async()=>zipBytes})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW.workouts.length'),1);
+  await zipApp.read(`selectSamsungFile({name:'wrong.csv',size:10,text:async()=>'wrong,data'})`);assert.equal(zipApp.read('SAMSUNG_PREVIEW'),null);
+  console.log('PASS: Samsung CSV import, timezone, 30-day window, invalid rows, match and duplicate prevention. Synthetic data only.');
   console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
   console.log('PASS: adaptive exposure blocks, pinned machines, comparable plateaus, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
