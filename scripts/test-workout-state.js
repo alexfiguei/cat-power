@@ -46,6 +46,40 @@ function workout(id = 'strength', overrides = {}) {
   return { id, sourceBundleId: 'com.sec.android.app.shealth', startDate: '2026-10-27T20:00:00Z', endDate: '2026-10-27T20:50:00Z', duration: 3000, calories: 310, workoutType: 'STRENGTH_TRAINING', heartRate: [{ bpm: 110 }, { bpm: 130 }], ...overrides };
 }
 (async () => {
+  { const food=app();
+  assert.equal(food.read('postContext().time'),'');
+  assert.match(food.read('vRef()'),/Ainda sem hora de conclusão/);
+  assert.equal(food.read('mealPlan(targets()).meals[4].t'),'21:00');
+  for(const [time,group,at] of [['08:00','morning','08:00'],['11:00','lunch','11:00'],['15:00','snack','15:00'],['17:39','snack','17:39'],['19:59','snack','19:59'],['20:00','dinner','21:00'],['21:15','dinner','21:15'],['22:00','late','22:00'],['00:30','late','00:30']]){
+    food.read(`S.nutrition={postTime:{d:TODAY,time:${JSON.stringify(time)}}}`);
+    assert.equal(food.read('postSlot(postContext().time).group'),group);
+    assert.equal(food.read('postSlot(postContext().time).at'),at);
+    assert.ok(food.read('postOptions(mealPlan(targets())).length')>=3);
+    assert.match(food.read('vRef()'),/Escolher esta refeição/);
+    assert.equal(food.read('postPlan(mealPlan(targets())).T.k'),food.read('mealPlan(targets()).T.k'));
+  }
+  food.read(`S.nutrition={postTime:{d:TODAY,time:'17:39'}}`);
+  const beforeFood=food.read('JSON.stringify({history:S.history,profile:S.profile,adj:S.adj})');
+  const baseK=food.read('mealPlan(targets()).T.k'),snackK=food.read('mealPlan(targets()).meals[3].k'),choiceK=food.read('postOptions(mealPlan(targets()))[0].k');
+  food.click('post-select',{id:'skyr'});
+  assert.equal(food.read('postPlan(mealPlan(targets())).T.k'),baseK-snackK+choiceK);
+  assert.match(food.read('vRef()'),/✓ Escolhida no plano de hoje/);
+  assert.equal(food.read('postPlan(mealPlan(targets())).meals.length'),food.read('mealPlan(targets()).meals.length'));
+  assert.equal(food.read('JSON.stringify({history:S.history,profile:S.profile,adj:S.adj})'),beforeFood);
+  const persistedFood=app(food.storage);assert.match(persistedFood.read('vRef()'),/✓ Escolhida no plano de hoje/);
+  food.read(`S.nutrition.postTime.d='2026-10-26'`);assert.equal(food.read('postContext().time'),'');
+  food.read(`S.history=[{d:TODAY,t1:Date.parse('2026-10-27T20:55:00Z'),watch:{end:'2026-10-27T17:39:00Z'}}];S.nutrition={}`);
+  assert.equal(food.read('postContext().time'),'17:39');assert.match(food.read('postContext().source'),/relógio/);
+  food.read(`S.history[0].watch.end='invalid'`);assert.equal(food.read('postContext().time'),'20:55');
+  food.read(`S.history.push({d:TODAY,t1:Date.parse('2026-10-28T00:30:00Z')})`);assert.equal(food.read('postContext().time'),'20:55');
+  food.change({id:'post-time',value:'22:30',dataset:{}});assert.equal(food.read('postContext().time'),'22:30');
+  assert.equal(food.read('postPlan(mealPlan(targets())).meals[5].t'),'Dia');
+  food.click('post-auto');assert.equal(food.read('postContext().time'),'20:55');
+  food.control.failStore=true;food.change({id:'post-time',value:'18:00',dataset:{}});assert.equal(food.read('postContext().time'),'20:55');
+  food.control.failStore=false;food.click('post-open');assert.equal(food.read('ui.tab'),'refeicoes');
+  for(const weight of [55,86,110]){food.read(`S.profile.w=${weight};S.nutrition={postTime:{d:TODAY,time:'17:39'}}`);assert.ok(food.read('postOptions(mealPlan(targets())).every(o=>o.k>0&&o.p>0&&o.it.every(i=>!i.includes("NaN")))'));}
+  console.log('PASS: post-workout timing, 21h minimum dinner, watch/local/manual sources, stale/future exclusion, alternatives, replacement totals, persistence and failed saves.');
+  }
   const a = app(); seedDraft(a);
   assert.equal(a.read(`saveWorkout('A')`), true);
   assert.equal(a.read('S.history.length'), 1);

@@ -547,11 +547,11 @@ const MEALS=[
   {q:110,u:'g',n:'arroz (peso cru)',g:'c',mn:40,k:355,p:7,c:78,f:0.6},
   {q:200,u:'g',n:'legumes',g:'x',k:30,p:2,c:5,f:0.3},
   {q:10,u:'ml',n:'azeite',g:'f',k:820,p:0,c:0,f:91}]},
- {t:'16:30',n:'Lanche antes do treino',it:[
+ {t:'16:30',n:'Lanche',it:[
   {q:80,u:'g',n:'pão integral',g:'c',mn:40,k:250,p:9,c:43,f:3.5},
   {q:1,u:'un',n:['lata de atum ao natural','latas de atum ao natural'],g:'p',k:90,p:20,c:0,f:1},
   {q:1,u:'un',n:['banana','bananas'],g:'c',opt:1,k:105,p:1.3,c:27,f:0.4}]},
- {t:'20:00',n:'Jantar, depois do treino',it:[
+ {t:'21:00',n:'Jantar',it:[
   {q:150,u:'g',n:'salmão, pescada ou carne magra',g:'p',k:150,p:21,c:0,f:7},
   {q:250,u:'g',n:'batata-doce',g:'c',mn:100,k:86,p:1.6,c:20,f:0.1},
   {q:200,u:'g',n:'legumes',g:'x',k:30,p:2,c:5,f:0.3},
@@ -580,6 +580,67 @@ function mealPlan(t){
   return{t:m.t,n:m.n,it,k:Math.round(T.k),p:Math.round(T.p),c:Math.round(T.c),f:Math.round(T.f)}});
  const T=meals.reduce((a,m)=>({k:a.k+m.k,p:a.p+m.p,c:a.c+m.c,f:a.f+m.f}),{k:0,p:0,c:0,f:0});
  return{meals,T}}
+
+/* Refeições pós-treino: sugestões substituem uma refeição, nunca somam calorias do relógio. */
+const POST_FOOD={
+ skyr:['skyr natural','g',63,11,4,0.2],oats:['flocos de aveia (secos)','g',370,13,60,7],banana:['banana (parte comestível)','g',89,1.1,23,0.3],
+ milk:['leite meio-gordo','ml',46,3.3,4.8,1.6],whey:['whey (pó)','g',400,80,8,6],bread:['pão integral','g',250,9,43,3.5],
+ chicken:['peito de frango (cru)','g',110,23,0,1.5],rice:['arroz (cru)','g',355,7,78,0.6],veg:['legumes','g',30,2,5,0.3],oil:['azeite','ml',820,0,0,91],
+ fish:['pescada (crua)','g',80,18,0,0.9],potato:['batata (crua)','g',77,2,17,0.1],salmon:['salmão (cru)','g',208,20,0,13],
+ tuna:['atum ao natural (escorrido)','g',116,26,0,1],egg:['ovo inteiro (sem casca)','g',144,12.6,0.8,9.6],white:['claras','g',46,10.5,0.7,0.2],
+ tofu:['tofu firme','g',144,15,3,8],pasta:['massa (crua)','g',355,12,72,1.5]
+};
+const POST_RECIPES=[
+ {id:'skyr',n:'Taça de skyr, aveia e banana',groups:['morning','snack','late'],it:[['skyr',250],['oats',50],['banana',120]]},
+ {id:'eggs',n:'Ovos e claras com pão',groups:['morning','snack','late'],it:[['egg',100],['white',150],['bread',90]]},
+ {id:'shake',n:'Batido de leite, whey, aveia e banana',groups:['morning','snack','late'],it:[['milk',250],['whey',25],['oats',40],['banana',120]]},
+ {id:'chicken',n:'Frango com arroz e legumes',groups:['lunch','dinner','late'],it:[['chicken',150],['rice',90],['veg',150],['oil',5]]},
+ {id:'fish',n:'Pescada com batata e legumes',groups:['lunch','dinner'],it:[['fish',200],['potato',350],['veg',150],['oil',10]]},
+ {id:'salmon',n:'Salmão com arroz e legumes',groups:['lunch','dinner'],it:[['salmon',170],['rice',65],['veg',150]]},
+ {id:'tofu',n:'Tofu com massa e legumes',groups:['lunch','dinner'],it:[['tofu',200],['pasta',75],['veg',150]]},
+ {id:'tuna',n:'Sandes de atum e banana',groups:['snack'],it:[['tuna',120],['bread',100],['banana',120]]}
+];
+function postContext(now=Date.now()){
+ const day=iso(new Date(now)),manual=S.nutrition?.postTime;
+ if(manual?.d===day&&/^([01]\d|2[0-3]):[0-5]\d$/.test(manual.time))return{day,time:manual.time,source:'Hora indicada por ti',key:day+'|manual|'+manual.time};
+ const valid=t=>Number.isFinite(t)&&t<=now&&iso(new Date(t))===day;
+ const entries=S.history.map(h=>{const wt=Date.parse(h.watch?.end),t=valid(wt)?wt:Number(h.t1);return{h,t,watch:valid(wt)}}).filter(x=>x.t>0&&valid(x.t)).sort((a,b)=>b.t-a.t);
+ const last=entries[0];return last?{day,time:hhmm(last.t),source:last.watch?'Fim do treino importado do relógio':'Fim do treino guardado na app',key:day+'|'+last.t}: {day,time:'',source:'Ainda sem hora de conclusão de hoje',key:day+'|none'};
+}
+function postSlot(time){const m=Number(time.slice(0,2))*60+Number(time.slice(3));
+ if(m<300||m>=1320)return{group:'late',index:4,title:'Jantar tardio / ceia pós-treino',at:time,note:'Opções fáceis de preparar. Escolhe conforme a fome e a digestão; não precisas de cortar os hidratos por ser tarde.'};
+ if(m<660)return{group:'morning',index:0,title:'Pequeno-almoço pós-treino',at:time,note:'Uma refeição com proteína e hidratos para começar o dia.'};
+ if(m<900)return{group:'lunch',index:2,title:'Almoço pós-treino',at:time,note:'O almoço pode ser a tua refeição de recuperação.'};
+ if(m<1200)return{group:'snack',index:3,title:'Lanche pós-treino',at:time,note:'Faz este lanche após o treino. O jantar mantém-se às 21h ou mais tarde.'};
+ return{group:'dinner',index:4,title:'Jantar pós-treino',at:m<1260?'21:00':time,note:'Como o jantar está próximo, usa o próprio jantar para recuperar. Não é necessário acrescentar um lanche.'};
+}
+function postOptions(mp,ctx=postContext()){
+ if(!ctx.time)return[];const slot=postSlot(ctx.time),budget=mp.meals[slot.index].k;
+ return POST_RECIPES.filter(r=>r.groups.includes(slot.group)).map(r=>{
+  const base=r.it.reduce((sum,[id,q])=>sum+POST_FOOD[id][2]*q/100,0),factor=Math.max(0.5,Math.min(2,budget/base)),T={k:0,p:0,c:0,f:0};
+  const it=r.it.map(([id,q])=>{const f=POST_FOOD[id],step=id==='oil'?1:5,amount=Math.max(step,Math.round(q*factor/step)*step);['k','p','c','f'].forEach((key,i)=>T[key]+=f[i+2]*amount/100);return amount+' '+f[1]+' '+f[0]});
+  return{id:r.id,n:r.n,t:slot.at,it,...Object.fromEntries(Object.entries(T).map(([k,v])=>[k,Math.round(v)]))};
+ });
+}
+function postPlan(base,ctx=postContext()){
+ const mp={meals:base.meals.map(m=>({...m})),T:{...base.T}};if(!ctx.time)return mp;
+ const slot=postSlot(ctx.time),selected=S.nutrition?.postChoice,option=selected?.key===ctx.key?postOptions(base,ctx).find(o=>o.id===selected.id):null;
+ if(option)mp.meals[slot.index]={...option,n:slot.title+' · '+option.n};
+ else mp.meals[slot.index]={...mp.meals[slot.index],t:slot.at,n:slot.title};
+ // A late dinner is not followed by a fictitious earlier supper. Preserve its energy within the day.
+ if(slot.index===4&&mp.meals[5]&&(slot.group==='late'||slot.at>='22:00'))mp.meals[5]={...mp.meals[5],t:'Dia',n:'Porção a distribuir noutras refeições (não é uma segunda ceia obrigatória)'};
+ mp.T=mp.meals.reduce((a,m)=>{for(const k of ['k','p','c','f'])a[k]+=m[k];return a},{k:0,p:0,c:0,f:0});return mp;
+}
+function postWorkoutCard(base=mealPlan(targets())){
+ const ctx=postContext(),slot=ctx.time?postSlot(ctx.time):null,options=postOptions(base,ctx),selected=S.nutrition?.postChoice;
+ return `<section class="card stack" id="post-workout"><p class="eyebrow">Recuperação e massa muscular</p><h2>O que comer depois do treino</h2>
+ <p>${ctx.source}${ctx.time?' · <b>'+ctx.time+'</b>':''}</p><label>Hora em que terminaste o treino<input id="post-time" type="time" value="${ctx.time}" aria-label="Hora de fim do treino"></label>
+ ${S.nutrition?.postTime?.d===ctx.day?'<button class="btn ghost sm" data-act="post-auto">Usar hora automática do treino</button>':''}
+ ${slot?`<h3>${slot.title}${slot.at!==ctx.time?' · '+slot.at:''}</h3><p>${slot.note}</p><p class="banner">Escolhe uma alternativa. Substitui ${['o pequeno-almoço','','o almoço','o lanche','o jantar'][slot.index]} do dia tipo; não se soma por cima. As porções acompanham o teu alvo diário.</p>
+ ${options.map(o=>`<article class="stack" style="border-top:1px solid var(--line);padding-top:14px"><h3>${o.n}</h3><ul class="list">${o.it.map(i=>'<li>'+i+'</li>').join('')}</ul><p class="num">≈ ${o.k} kcal · ${o.p} g proteína · ${o.c} g hidratos · ${o.f} g gordura</p><button class="btn ${selected?.key===ctx.key&&selected.id===o.id?'':'ghost'} sm" data-act="post-select" data-id="${o.id}">${selected?.key===ctx.key&&selected.id===o.id?'✓ Escolhida no plano de hoje':'Escolher esta refeição'}</button></article>`).join('')}`:'<p>Guarda ou importa o treino para adaptar as refeições automaticamente, ou indica acima a hora de conclusão. Não usamos um treino antigo como se fosse de hoje.</p>'}
+ <p class="muted">O jantar é às 21h ou mais tarde. Os horários são sugestões práticas; o total diário de energia e proteína tem mais importância do que comer num minuto exato. Valores aproximados, variam com as marcas e a preparação. Pesa arroz e massa secos e carne/peixe crus, conforme indicado.</p>
+ <details><summary>Base das sugestões</summary><p>Proteína distribuída ao longo do dia, com doses habitualmente de 20–40 g por refeição, e hidratos para apoiar a recuperação. O ganho de massa depende também do treino e de energia suficiente no dia. Não adicionamos as calorias do relógio.</p><a href="https://pubmed.ncbi.nlm.nih.gov/28642676/" target="_blank" rel="noopener">ISSN · proteína e exercício</a> · <a href="https://pubmed.ncbi.nlm.nih.gov/28919842/" target="_blank" rel="noopener">ISSN · horário das refeições</a></details></section>`;
+}
 
 /* objetivos */
 const GOALS={
@@ -909,6 +970,7 @@ function savedWorkoutCard(h){const st=hStats(h);
  return `<section class="card stack" role="status"><p><span class="pill ok">✓ Concluído</span></p><h1>Treino guardado com sucesso</h1><p>Treino ${h.code} · ${dshort(h.d)}${h.t1?' · '+hhmm(h.t1):''}</p>
  <div class="watch num"><div><b>${h.sets}</b><small>séries guardadas</small></div><div><b>${h.reps}</b><small>repetições</small></div>${summaryDuration(st)}${summaryCalories(st)}</div>
  ${!h.watch?'<p class="muted">Calorias e tempo do relógio aguardam importação. O tempo na app é independente do cronómetro do Watch.</p>':''}
+ <button class="btn" data-act="post-open">🍽 O que comer agora · opções pós-treino</button>
  ${h.ex.map(e=>`<div class="stack"><h3>${EXN[e.id]||e.id}</h3>${EXN[e.id]?pics({id:e.id,n:EXN[e.id]}):''}${e.sets.map((s,k)=>`<div class="exrow num"><span>✓ Série ${k+1}</span><span>${fmt(s.kg||0)} kg × ${s.r} reps</span></div>`).join('')}</div>`).join('')}
  <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
 }
@@ -917,7 +979,7 @@ function vHoje(){
  refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,nx=nextCode();
  const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard()}</div>`;
  const completed=S.history.filter(x=>x.d<=TODAY),done=completed.length,last7=completed.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=[...completed].sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).slice(-1)[0];
- let h=`<div class="stack">
+ let h=`<div class="stack">${postContext().time?'<button class="btn" data-act="post-open">🍽 Refeições depois do treino de hoje</button>':''}
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
  <p class="eyebrow">Próximo treino pelo teu histórico</p>
  <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Selecionado</small>':c===nx?'<small class="nx">Sugerido</small>':''}</button>`).join('')}</div>
@@ -1063,7 +1125,7 @@ function vPlano(){
 
 /* ---------- REFEIÇÕES ---------- */
 function vRef(){
- const p=S.profile,t=targets(),G=goal(),age=p.age||30,mp=mealPlan(t),T=mp.T,per=Math.round(t.P/mp.meals.length/5)*5,agua=Math.round(p.w*0.035*2)/2;
+ const p=S.profile,t=targets(),G=goal(),age=p.age||30,base=mealPlan(t),mp=postPlan(base),T=mp.T,per=Math.round(t.P/mp.meals.length/5)*5,agua=Math.round(p.w*0.035*2)/2;
  const extra=p.goal==='ganhar'?'<li><b>Sem fome?</b> Um batido pode ajudar a cumprir o alvo: contabiliza leite, aveia, banana e manteiga de amendoim nas porções do dia, em vez de o somar automaticamente ao plano.</li>':
   (p.goal==='perder'||p.goal==='definir')?'<li><b>Fome?</b> Começa as refeições pelos legumes e pela proteína. Fruta inteira sacia mais do que sumo.</li><li><b>Sem pressa:</b> perder ½ kg por semana protege o músculo e dá energia para treinar.</li>':'';
  return `<div class="stack"><div><p class="eyebrow">${G.eb}</p><h1>${G.h1}</h1></div>
@@ -1073,6 +1135,7 @@ function vRef(){
   <div class="macro"><b>${t.C}</b><small>Hidratos g</small></div>
   <div class="macro"><b>${t.F}</b><small>Gordura g</small></div></div>
   <p class="muted" style="font-size:.92rem">Estimativa inicial para ${p.sex==='f'?'mulher':'homem'}, ${age} anos, ${p.h} cm, ${fmt(p.w)} kg · objetivo: ${G.n.toLowerCase()}. Proteína a ${fmt(G.P)} g/kg, gordura a ${fmt(G.F)} g/kg, o resto em hidratos.${S.adj?` Inclui ajuste de ${S.adj>0?'+':''}${S.adj} kcal.`:''}</p><p class="muted">Para ganho de massa, o plano usa 2 g de proteína/kg, dentro do intervalo de 1,6–2,2 g/kg da revisão consultada. Distribui a proteína ao longo do dia e usa hidratos para apoiar o treino.</p></div>
+ ${postWorkoutCard(base)}
  ${nutritionReviewCard()}
  <div class="card"><h3>Um dia tipo</h3><p class="muted num" style="font-size:.9rem;margin-top:2px">≈ ${T.k} kcal · ${T.p} g P · ${T.c} g H · ${T.f} g G</p>
   <div style="margin-top:6px">${mp.meals.map(m=>`<div class="meal"><time class="num">${m.t}</time><div><b>${m.n}</b><ul>${m.it.map(x=>`<li>${x}</li>`).join('')}</ul><p class="mm num">${m.k} kcal · ${m.p} g proteína</p></div></div>`).join('')}</div>
@@ -1084,7 +1147,7 @@ function vRef(){
   <span>150 g skyr</span><span>1 dose de whey (30 g)</span></div></div>
  <div class="card stack"><h3>Dicas que fazem diferença</h3><ul class="list">
   <li><b>≈ ${per} g de proteína por refeição.</b> Espalhar a proteína pelo dia ajuda o músculo${age>=40?', sobretudo depois dos 40':''}.</li>
-  <li><b>Hidratos à volta do treino:</b> lanche 1–2 h antes, jantar com batata ou arroz depois.</li>
+  <li><b>Hidratos à volta do treino:</b> ajusta o lanche à hora do treino e usa as opções pós-treino acima. Jantar às 21h ou mais tarde.</li>
   <li><b>Água:</b> ${fmt(agua)} L por dia, mais 0,5 L por hora de treino.</li>
   ${extra}
   <li><b>Álcool</b> trava a recuperação e a síntese de proteína. Guarda para ocasiões.</li>
@@ -1181,6 +1244,7 @@ document.addEventListener('input',e=>{const el=e.target;
   else return;save();if(S.setup)refreshKV()}
 });
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
+ if(id==='post-time'){if(!/^([01]\d|2[0-3]):[0-5]\d$/.test(v))return;const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postTime:{d:iso(new Date()),time:v},postChoice:null};if(save(next))render();return}
  if(id==='plan-week'){const offset=Number(v);if(Number.isInteger(offset)&&offset>=0&&offset<=4){ui.planWeekOffset=offset;render()}return}
  if(id==='samsung-file'){if(e.target.files&&e.target.files[0])selectSamsungFile(e.target.files[0]);return}
  if(e.target.dataset.rir){const next=JSON.parse(JSON.stringify(S)),d=next.drafts[ui.code];if(!d)return;d.rir=d.rir||{};const value=v===''?null:Number(v);if(value!==null&&(!Number.isInteger(value)||value<0||value>4))return;d.rir[e.target.dataset.rir]=value;if(save(next))render();return;}
@@ -1194,6 +1258,9 @@ document.addEventListener('click',e=>{
  if(e.target===$('#photo-dialog')){$('#photo-dialog').close();return}
  const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+ if(a==='post-open'){ui.tab='refeicoes';render();document.getElementById('post-workout')?.scrollIntoView?.({behavior:'smooth'});return}
+ if(a==='post-auto'){const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postTime:null,postChoice:null};if(save(next))render();return}
+ if(a==='post-select'){const ctx=postContext();if(!postOptions(mealPlan(targets()),ctx).some(o=>o.id===b.dataset.id))return;const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postChoice:{key:ctx.key,id:b.dataset.id}};if(save(next)){render();toast('Refeição substituída no plano de hoje ✓')}return}
  if(a==='code'){ui.code=b.dataset.c;ui.editing=false;ui.manualChoice=true;render();toast(`Plano ${ui.code} selecionado. A sequência só avança depois de um treino concluído.`)}
  else if(a==='variant'){const slot=Number(b.dataset.slot),code=ui.code,sl=SESS[code]&&SESS[code].ex[slot];if(!sl)return;const current=exList(code),d=draft(code),id=current[slot].id;
   if((d.v[id]||[]).some(s=>s&&(s.done||s.r>0||s.kg>0))){toast('Esta variante já tem séries registadas neste treino. Guarda-as antes de trocar.');return;}
@@ -1230,7 +1297,7 @@ document.addEventListener('click',e=>{
  else if(a==='weigh'){const v=num($('#w-in').value);if(!v||v<30||v>250){toast('Escreve o peso em kg, por exemplo 86,4');return}
   S.weights=S.weights.filter(x=>x.d!==TODAY);S.weights.push({d:TODAY,kg:v});S.weights.sort((x,y)=>x.d<y.d?-1:1);S.profile.w=v;save();render();toast('Peso registado')}
  else if(a==='nutrition-apply'){const review=nutritionReview();if(!review.delta)return;if(!document.getElementById('food-adherence').checked){toast('Confirma se cumpriste aproximadamente a alimentação antes de ajustar.');return;}
-  const next=JSON.parse(JSON.stringify(S));next.adj=(next.adj||0)+review.delta;next.nutrition={lastAdjust:TODAY,delta:review.delta,goal:next.profile.goal};if(save(next)){render();toast(`Alvo atualizado: ${targets().kcal} kcal. Nova revisão em 14 dias.`);}}
+  const next=JSON.parse(JSON.stringify(S));next.adj=(next.adj||0)+review.delta;next.nutrition={...next.nutrition,lastAdjust:TODAY,delta:review.delta,goal:next.profile.goal};if(save(next)){render();toast(`Alvo atualizado: ${targets().kcal} kcal. Nova revisão em 14 dias.`);}}
  else if(a==='adj'){S.adj+=+b.dataset.v;save();render();toast(`Novo alvo: ${targets().kcal} kcal`)}
  else if(a==='hc'){hcConnect()}
  else if(a==='hc-settings'){if(HP)HP.openHealthConnectSettings().catch(()=>toast('Abre o Health Connect nas definições do telemóvel.'))}
