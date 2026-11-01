@@ -214,23 +214,58 @@ function workout(id = 'strength', overrides = {}) {
   report.click('photo-next');assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_1.jpg');
   report.click('photo-close');assert.equal(report.nodes.get('#photo-dialog').open,false);
   // Block rotation depends on actual exercise exposures, not calendar weeks or watch labels.
-  const adaptive=app();
+  const weekly=app();
+  weekly.read('S.drafts={};S.start=TODAY');
+  const previewBefore=weekly.read('JSON.stringify(S)');
+  for(const code of ['A','B','C','D']){
+    const weeks=Array.from({length:11},(_,week)=>JSON.parse(weekly.read(`JSON.stringify(exList('${code}',${week}))`)));
+    for(let w=1;w<weeks.length;w++){
+      if(w%5===4)assert.deepEqual(weeks[w].map(e=>e.id),weeks[w-1].map(e=>e.id),'deload keeps week 4 variants');
+      else assert.notDeepEqual(weeks[w].map(e=>e.id),weeks[w-1].map(e=>e.id),'every progression week has different exercises');
+      weeks[w].forEach((ex,i)=>{
+        assert.equal(ex.muscle,weeks[0][i].muscle);
+        assert.equal(ex.sets,weeks[0][i].sets);
+        for(const pos of [0,1])assert.ok(fs.existsSync(`img/${ex.id}_${pos}.jpg`),ex.id+' has photos');
+      });
+    }
+    assert.equal(weeks[0][0].id,weeks[1][0].id,'compound stays for two weeks');
+    assert.notEqual(weeks[1][0].id,weeks[2][0].id,'compound changes in week 3');
+  }
+  assert.equal(weekly.read('JSON.stringify(S)'),previewBefore,'previews do not mutate data');
+  weekly.read('S.start="2026-10-20"');
+  assert.equal(weekly.read('cycleWeek()'),2);
+  assert.equal(weekly.read('exList("A")[4].id'),'elev_lat');
+  weekly.read('S.start="2026-10-21"');assert.equal(weekly.read('cycleWeek()'),1);
+  weekly.read('S.start="2026-10-20"');
+  // Upgrade empty old drafts immediately; keep every identity if entries exist.
+  weekly.read(`S.drafts.A={date:TODAY,v:{},ids:exList('A',0).map(e=>e.id)}`);
+  assert.equal(weekly.read('draft("A").ids[4]'),'elev_lat');
+  weekly.read(`S.drafts.A={date:TODAY,v:{sup_incl_maq:[{kg:20,r:8,done:true}]},ids:exList('A',0).map(e=>e.id)}`);
+  assert.equal(weekly.read('draft("A").ids[4]'),'elev_lat_maq');
+  const pinned=weekly.read('JSON.stringify(S.drafts.A)');
+  weekly.read('ui.tab="plano";render()');
+  weekly.change({id:'plan-week',value:'3',dataset:{}});
+  assert.match(weekly.nodes.get('#app').innerHTML,/Semana 5 de 5/);
+  assert.match(weekly.nodes.get('#app').innerHTML,/2×6–10/);
+  assert.equal(weekly.read('JSON.stringify(S.drafts.A)'),pinned);
+  assert.equal(weekly.read('cycleWeek()'),2);
+  assert.equal(weekly.read('exList("A")[4].id'),'elev_lat_maq');
+  weekly.change({id:'plan-week',value:'4',dataset:{}});
+  assert.match(weekly.nodes.get('#app').innerHTML,/Semana 1 de 5 · ciclo 2/);
+  // Manual substitutions survive reload; a new exercise never inherits another's load.
+  const manual=app();manual.read(`S.setup=true;ui.code='A';S.start='2026-10-20';S.drafts={};draft('A')`);
+  manual.click('variant',{slot:'4'});const chosen=manual.read('exList("A")[4].id');
+  assert.equal(app(manual.storage).read('exList("A")[4].id'),chosen);
+  manual.read(`S.logs.elev_lat_maq=[{d:TODAY,sets:[{kg:40,r:12}],rir:2}]`);
+  assert.equal(manual.read('sugg(exList("A",1)[4])'),null);
+  // The separate Mary plan retains exposure blocks and comparable plateau rules.
+  const adaptive=app(new Map(),'mary');
   const first=adaptive.read('exList("A")[0].id');
-  assert.equal(first,'sup_incl_maq');
   adaptive.read('S.drafts={};S.start="2025-01-01"');
   assert.equal(adaptive.read('exList("A")[0].id'),first);
-  adaptive.read(`S.history=Array.from({length:5},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'sup_incl_maq',sets:[{kg:20,r:8+i}]}]}));S.drafts={}`);
-  assert.equal(adaptive.read('exList("A")[0].id'),first);
-  adaptive.read(`S.history.push({d:'2026-10-06',code:'A',ex:[{id:'sup_incl_maq',sets:[{kg:20,r:12}]}]});S.drafts={}`);
+  adaptive.read(`S.history=Array.from({length:6},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'${first}',sets:[{kg:20,r:8+i}]}]}));S.drafts={}`);
   assert.notEqual(adaptive.read('exList("A")[0].id'),first);
-  assert.equal(adaptive.read('exList("A")[0].muscle'),'Peito');
-  const pinned=adaptive.read('draft("A").ids[0]');
-  adaptive.read(`S.history=[]`);
-  assert.equal(adaptive.read('exList("A")[0].id'),pinned);
-  adaptive.read(`S.drafts={};S.history=Array.from({length:4},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'elev_lat_maq',sets:[{kg:5,r:12}]}]}))`);
-  assert.notEqual(adaptive.read('exList("A")[4].id'),'elev_lat_maq');
-  // Plateau detection requires three complete, comparable normal-recovery exposures and RIR.
-  adaptive.read(`S.drafts={};S.history=Array.from({length:3},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'sup_incl_maq',rir:2,sets:Array.from({length:4},()=>({kg:20,r:8}))}]}))`);
+  adaptive.read(`S.drafts={};S.history=Array.from({length:3},(_,i)=>({d:'2026-10-'+String(i+1).padStart(2,'0'),code:'A',ex:[{id:'${first}',rir:2,sets:Array.from({length:SESS.A.ex[0].sets},()=>({kg:20,r:8}))}]}))`);
   assert.equal(adaptive.read('variantChoice("A",0).changed'),true);
   adaptive.read('S.history[2].readiness="tired"');
   assert.equal(adaptive.read('variantChoice("A",0).changed'),undefined);
@@ -308,6 +343,6 @@ function workout(id = 'strength', overrides = {}) {
   const picker=app();picker.read('S.hc={on:true,hr:false}');picker.event('click',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),true);const before=picker.nodes.get('#app').innerHTML;picker.read('autoWatch();render()');assert.equal(picker.control.queries.length,0);assert.equal(picker.nodes.get('#app').innerHTML,before);picker.event('cancel',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),false);
   console.log('PASS: Samsung CSV import, timezone, 30-day window, invalid rows, match and duplicate prevention. Synthetic data only.');
   console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
-  console.log('PASS: adaptive exposure blocks, pinned machines, comparable plateaus, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
+  console.log('PASS: weekly variant schedules, cycle rollover and deload, read-only future previews, upgrade/draft preservation, separate variant loads, legacy exposure blocks, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

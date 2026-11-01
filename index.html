@@ -255,7 +255,8 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 <script>
 /* ---------- DADOS DO PLANO ---------- */
 /* Cada exercício é um posto com variantes para o mesmo grupo muscular.
-   As variantes mudam por blocos de sessões realmente registadas, nunca pelo calendário.
+   Na Cat Power, isolados/core variam semanalmente e compostos a cada duas semanas de treino.
+   A quinta semana mantém as variantes da quarta, com menos esforço.
    iso = exercício de isolamento. img = há fotos da variante. */
 const SESS={
  A:{name:'Superior · Força',plate:20,cls:'blue',dur:'60–70 min',ex:[
@@ -492,7 +493,7 @@ function slotHistory(code,slot){const ids=SESS[code].ex[slot].v.map(e=>e.id);
  return S.history.filter(h=>h.d<=TODAY&&(!h.t1||h.t1<=Date.now())&&h.code===code).sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).flatMap(h=>(h.ex||[]).filter(e=>ids.includes(e.id)&&e.sets.some(z=>z.r>0)).map(e=>({...e,d:h.d,readiness:h.readiness||'normal'})));}
 function muscleFor(code,slot){const group=(GROUPS[code]||[]).find(g=>g[1].includes(slot));return group?group[0]:'Músculo do exercício';}
 function machineVariant(v){return /máquina|smith|cabo|polia|leg press|leg curl|hack|pendulum|peck deck/i.test(v.n);}
-function variantChoice(code,slot){const sl=SESS[code].ex[slot],history=slotHistory(code,slot),last=history.at(-1),limit=sl.iso||sl.core?4:6;
+function blockVariantChoice(code,slot){const sl=SESS[code].ex[slot],history=slotHistory(code,slot),last=history.at(-1),limit=sl.iso||sl.core?4:6;
  const sequence=sl.v.map((v,i)=>i).sort((a,b)=>Number(machineVariant(sl.v[b]))-Number(machineVariant(sl.v[a])));
  if(!last)return{vi:sequence[0],uses:0,limit,why:'Primeiro bloco: aprender a execução e estabelecer a carga nesta variante.'};
  const vi=sl.v.findIndex(v=>v.id===last.id);let uses=0;for(let j=history.length-1;j>=0&&history[j].id===last.id;j--)uses++;
@@ -501,12 +502,27 @@ function variantChoice(code,slot){const sl=SESS[code].ex[slot],history=slotHisto
  if(uses>=limit||plateau){const next=sequence[(sequence.indexOf(vi)+1)%sequence.length];return{vi:next,uses:0,limit,why:plateau?'Três registos comparáveis sem subir repetições na primeira série. Nova variante para o mesmo músculo.':'Bloco concluído. Nova variante para o mesmo músculo, com carga própria.',changed:true,previous:last.id};}
  return{vi,uses,limit,why:`Mantém esta variante para medir a progressão: ${uses} de ${limit} sessões do bloco concluídas.`};
 }
+// Zero-based week since the plan started; use date-only UTC arithmetic across DST.
+function trainingWeekIndex(){const days=(Date.parse(TODAY)-Date.parse(S.start))/864e5;return Number.isFinite(days)?Math.max(0,Math.floor(days/7)):0;}
+function weekStart(index){const start=Date.parse(S.start);return new Date((Number.isFinite(start)?start:Date.parse(TODAY))+index*7*864e5).toISOString().slice(0,10);}
+function variantChoice(code,slot,week=trainingWeekIndex()){
+ if(FLAV==='mary')return blockVariantChoice(code,slot);
+ const sl=SESS[code].ex[slot],cycle=Math.floor(week/5),phase=week%5;
+ const sequence=sl.v.map((v,i)=>i).sort((a,b)=>Number(machineVariant(sl.v[b]))-Number(machineVariant(sl.v[a])));
+ // Four progression weeks, followed by the same variants in the reduced-effort week.
+ const step=cycle*4+Math.min(phase,3),block=sl.iso||sl.core?step:Math.floor(step/2),vi=sequence[block%sequence.length];
+ const previousStep=week?Math.floor((week-1)/5)*4+Math.min((week-1)%5,3):0;
+ const previousBlock=sl.iso||sl.core?previousStep:Math.floor(previousStep/2);
+ const changed=week>0&&sequence[previousBlock%sequence.length]!==vi;
+ return{vi,changed,why:phase===4?'Semana leve: mantém a variante da semana anterior e reduz o esforço.':changed?'Nova variante prevista para esta semana, para o mesmo grupo muscular. Começa com a carga própria desta variante.':sl.iso||sl.core?'Variante desta semana. Na próxima semana de progressão, muda para a seguinte.':'Composto mantido durante duas semanas de progressão para acompanhar a evolução da carga.'};
+}
+function draftHasEntries(d){return !!d&&Object.values(d.v||{}).some(rows=>rows.some(z=>z&&(z.r>0||z.kg>0||z.done)));}
 function marGoal(ex){const g=(typeof S!=='undefined'&&S&&S.profile)?S.profile.goal:null;if(FLAV!=='mary'||!g)return ex;
  if(g==='perder'||g==='definir')return Object.assign({},ex,{reps:[ex.reps[0]+2,ex.reps[1]+3],rest:Math.min(ex.rest,60)});
  if(g==='ganhar')return Object.assign({},ex,{sets:ex.sets+(ex.core?0:1)});
  return ex}
-function exList(code){const d=S.drafts[code],active=d&&d.date===TODAY;
- return SESS[code].ex.map((sl,i)=>{const choice=variantChoice(code,i),pinned=active&&((d.ids||[])[i]||sl.v.find(v=>(d.v[v.id]||[]).some(z=>z&&(z.r>0||z.kg>0||z.done)))?.id),pin=sl.v.findIndex(v=>v.id===pinned),vi=pin>=0?pin:choice.vi;
+function exList(code,previewWeek=null){const d=S.drafts[code],active=previewWeek===null&&d&&d.date===TODAY&&(FLAV==='mary'||d.planWeek===trainingWeekIndex()||draftHasEntries(d));
+ return SESS[code].ex.map((sl,i)=>{const choice=variantChoice(code,i,previewWeek??trainingWeekIndex()),pinned=active&&((d.ids||[])[i]||sl.v.find(v=>(d.v[v.id]||[]).some(z=>z&&(z.r>0||z.kg>0||z.done)))?.id),pin=sl.v.findIndex(v=>v.id===pinned),vi=pin>=0?pin:choice.vi;
  return marGoal(Object.assign({},sl,sl.v[vi],{rest:FLAV!=='mary'&&!sl.iso&&!sl.core?Math.max(120,sl.rest):sl.rest,slot:i,vi,nv:sl.v.length,muscle:muscleFor(code,i),choice:pin>=0&&pin!==choice.vi?{...choice,why:'Variante mantida neste treino em curso.',changed:false}:choice}));});}
 function allVar(code){return SESS[code].ex.flatMap(sl=>sl.v)}
 /* esforço por semana do ciclo (RIR = repetições em reserva) */
@@ -622,7 +638,7 @@ function trainingHistory(){return S.history.filter(h=>h.d<=TODAY&&(!h.t1||h.t1<=
 function nextTrainingInfo(){const last=trainingHistory().slice(-1)[0];if(!last)return{code:ORDER[0],last:null};const code=rotationCode(last);return{code:code?after(code):null,last};}
 function suggested(){return nextTrainingInfo().code}
 function nextCode(){return suggested()}
-const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false,manualChoice:false};
+const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false,manualChoice:false,planWeekOffset:0};
 function refreshWorkoutSelection(){if(ui.editing||ui.manualChoice)return;
  const active=Object.keys(S.drafts).find(c=>SESS[c]&&S.drafts[c].date===TODAY&&Object.values(S.drafts[c].v||{}).some(sets=>sets.some(s=>s&&(s.done||s.r>0||s.kg>0))));
  const saved=S.history.filter(h=>h.d===TODAY&&h.source!=='watch'&&ORDER.includes(h.code)).sort((a,b)=>(a.t1||0)-(b.t1||0)).slice(-1)[0];
@@ -652,7 +668,7 @@ function goal(){return GOALS[S.profile.goal]||GOALS.ganhar}
 function targets(){const p=S.profile,G=goal(),age=p.age||30;const bmr=10*p.w+6.25*p.h-5*age+(p.sex==='f'?-161:5);const tdee=bmr*p.act;
  const kcal=Math.max(p.sex==='f'?1300:1600,Math.round((tdee+G.kcal+S.adj)/10)*10);const P=Math.round(G.P*p.w),F=Math.round(G.F*p.w),C=Math.max(0,Math.round((kcal-P*4-F*9)/4));
  return{bmr:Math.round(bmr),tdee:Math.round(tdee),kcal,P,F,C}}
-function cycleWeek(){const days=Math.max(0,Math.floor((Date.parse(TODAY)-Date.parse(S.start))/864e5));return Math.floor(days/7)%5+1}
+function cycleWeek(){return trainingWeekIndex()%5+1}
 function lastLog(id){const a=(S.logs[id]||[]).filter(x=>x.d<=TODAY).sort((a,b)=>a.d.localeCompare(b.d));return a.at(-1)||null}
 function sugg(ex){const l=lastLog(ex.id);if(!l)return null;const kgs=l.sets.map(s=>s.kg).filter(x=>x>0);const top=kgs.length?Math.max(...kgs):0;
  const hit=l.sets.length>=ex.sets&&l.sets.every(s=>s.r>=ex.reps[1]&&s.kg===top)&&l.rir>=1;
@@ -685,7 +701,7 @@ function coachPlan(ex,g,deload,n,vals){
   if(v.done&&v.kg>0&&v.r>0){cur=coachNext(ex,v);if((recovery==='tired'||failure||deload)&&cur.kg>v.kg)cur={kg:v.kg,why:'mantém a carga e deixa margem para completar com boa técnica'};}}
  return out;
 }
-function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){const ids=exList(code).map(e=>e.id);d=S.drafts[code]={date:TODAY,v:{},ids,rir:{},readiness:'normal'}}return d}
+function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){const ids=exList(code).map(e=>e.id);d=S.drafts[code]={date:TODAY,v:{},ids,rir:{},readiness:'normal',planWeek:trainingWeekIndex()}}else if(FLAV!=='mary'&&d.planWeek!==trainingWeekIndex()){const ids=exList(code).map(e=>e.id);d.ids=ids;d.planWeek=trainingWeekIndex()}return d}
 const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
 
@@ -884,7 +900,7 @@ function exCard(ex,i,wk,deload,d){
   if(nx&&nx.kg>lv.kg)tip=`<p class="coach"><b>Treinador:</b> estava leve — da próxima vez começa com <span class="up">${fmt(nx.kg)} kg</span>.</p>`}
  const rir=d.rir&&d.rir[ex.id];
  return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':d.readiness==='tired'?'3 RIR':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.muscle} · variante ${ex.vi+1} de ${ex.nv}</p></div><span class="ex-idx">${pad(i+1)}</span></div>
- ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':'Bloco de progressão'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}<div class="sets">${rows}</div>${tip}
+ ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':FLAV==='mary'?'Bloco de progressão':'Variação semanal'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}<div class="sets">${rows}</div>${tip}
  <label>Reserva na última série (RIR)<select class="rotation-select" data-rir="${ex.id}" aria-label="Reserva na última série de ${ex.n}"><option value="">Ainda não registei</option>${[0,1,2,3,4].map(r=>`<option value="${r}" ${rir===r?'selected':''}>${r===0?'0 · não conseguia fazer mais nenhuma':r===4?'4 ou mais':r+' '+(r===1?'repetição':'repetições')+' em reserva'}</option>`).join('')}</select></label>
  <button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}">Trocar variante · ${ex.muscle}</button>
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
@@ -906,7 +922,7 @@ function vHoje(){
  <p class="eyebrow">Próximo treino pelo teu histórico</p>
  <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Selecionado</small>':c===nx?'<small class="nx">Sugerido</small>':''}</button>`).join('')}</div>
  ${recommendationCard()}
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core. A app pode antecipar a troca após 3 registos comparáveis sem progresso.`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Novas variantes todas as semanas de progressão: isolados e core semanalmente; compostos a cada duas semanas. Vê as próximas semanas no Plano.'}`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
@@ -1001,7 +1017,7 @@ function methodCard(){const sources=[
  ['Júlio Balestrin','https://www.youtube.com/playlist?list=PLx6UfnuK_tlah9Vxgr3RduwmOhzZ8jloB','Série pública de treinos para iniciantes localizada. Sem transcrição verificável nesta consulta; não foram atribuídas regras específicas ao vídeo.'],
  ['Ricardo Pannain','https://teampannain.com/','Treino e alimentação acompanhados em conjunto. A página pública não disponibiliza o protocolo individual.'],
  ['Rubens Gomes','https://overallteam.com.br/','Organização de treino e dieta com revisões periódicas. As planilhas privadas não foram consultadas.']
- ];return `<section class="card stack"><h2>Critérios e fontes</h2><p>Plano da Cat Power, adaptado de princípios públicos e literatura de hipertrofia. Não é uma prescrição nem um acompanhamento destes treinadores.</p><details><summary>O que foi consultado e aplicado</summary><ul class="list">${sources.map(([name,url,note])=>`<li><a href="${url}" target="_blank" rel="noopener">${name} ↗</a>: ${note}</li>`).join('')}</ul><p><a href="https://pubmed.ncbi.nlm.nih.gov/35438660/" target="_blank" rel="noopener">Revisão sobre variação planeada de exercícios ↗</a></p><p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6680710/" target="_blank" rel="noopener">Revisão sobre alimentação para hipertrofia ↗</a></p><p class="muted">Consulta: 27/10/2026. Blocos de 4/6 exposições e ajuste de 150 kcal são escolhas conservadoras da app, não regras comuns a todos os especialistas.</p></details></section>`;
+ ];return `<section class="card stack"><h2>Critérios e fontes</h2><p>Plano da Cat Power, adaptado de princípios públicos e literatura de hipertrofia. Não é uma prescrição nem um acompanhamento destes treinadores.</p><details><summary>O que foi consultado e aplicado</summary><ul class="list">${sources.map(([name,url,note])=>`<li><a href="${url}" target="_blank" rel="noopener">${name} ↗</a>: ${note}</li>`).join('')}</ul><p><a href="https://pubmed.ncbi.nlm.nih.gov/35438660/" target="_blank" rel="noopener">Revisão sobre variação planeada de exercícios ↗</a></p><p><a href="https://pmc.ncbi.nlm.nih.gov/articles/PMC6680710/" target="_blank" rel="noopener">Revisão sobre alimentação para hipertrofia ↗</a></p><p class="muted">Consulta: 27/10/2026. A frequência de variação e o ajuste de 150 kcal são escolhas da app, não regras comuns a todos os especialistas.</p></details></section>`;
 }
 function nutritionReview(){const entries=[...new Map(S.weights.filter(w=>w.d<=TODAY&&w.kg>=30&&w.kg<=250).map(w=>[w.d,w])).values()].sort((a,b)=>a.d.localeCompare(b.d)),recent=entries.filter(w=>Date.parse(TODAY)-Date.parse(w.d)<21*864e5),r=trend();
  const last=S.nutrition&&S.nutrition.lastAdjust,cooldown=last&&Date.parse(TODAY)-Date.parse(last)<14*864e5;
@@ -1016,14 +1032,16 @@ function nutritionReviewCard(){const n=nutritionReview();return `<section class=
 
 /* ---------- PLANO ---------- */
 function vPlano(){
+ const previewWeek=trainingWeekIndex()+ui.planWeekOffset,previewCycleWeek=previewWeek%5+1;
  let h=`<div class="stack"><div><p class="eyebrow">4 treinos em rotação · ciclo de 5 semanas</p><h1>O teu plano</h1></div>
  <div class="card stack"><h3>Sem dias fixos</h3><div class="sched">${ORDER.map(c=>`<div class="srow"><b>${c}</b><i style="background:var(--${SESS[c].cls})"></i><span>${SESS[c].name}</span></div>`).join('')}</div>
-  <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div></div>`;
+  <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div>`;
+ if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve: as variantes da semana 4 mantêm-se, com metade das séries.':'Isolados e core mudam semanalmente; os compostos mudam a cada duas semanas de progressão.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
  ORDER.forEach(c=>{const s=SESS[c];
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
   <p class="eyebrow" style="margin-top:12px">Ativação</p><div>${ACT[c].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
   <div style="margin-top:4px;display:flex;flex-direction:column;gap:8px">`;
-  const exL=exList(c),card=ex=>`<article class="stack" style="border-top:1px solid var(--line);padding-top:14px;margin-top:8px"><div><h3>${ex.n}</h3><p class="ex-meta num">${ex.sets}×${ex.reps[0]}–${ex.reps[1]} · ${ex.core?'core':ex.iso?'isolado':'composto'}</p></div>${ex.img?pics(ex):''}<details><summary>Técnica e rotação</summary><ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details></article>`;
+  const exL=exList(c,FLAV==='mary'?null:previewWeek),card=ex=>`<article class="stack" style="border-top:1px solid var(--line);padding-top:14px;margin-top:8px"><div><h3>${ex.n}</h3><p class="ex-meta num">${FLAV!=='mary'&&previewCycleWeek===5?Math.ceil(ex.sets/2):ex.sets}×${ex.reps[0]}–${ex.reps[1]} · ${ex.core?'core':ex.iso?'isolado':'composto'}</p></div>${ex.img?pics(ex):''}<details><summary>Técnica e rotação</summary><ul>${ex.cues.map(x=>`<li>${x}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p class="muted" style="font-size:.88rem;margin-top:8px">Rotação: ${s.ex[ex.slot].v.map((v,k)=>k===ex.vi?`<b style="color:var(--ink)">${v.n} (atual)</b>`:v.n).join(' → ')}</p><p style="margin-top:8px">${vid(ex)}</p></details></article>`;
   if(FLAV==='mary'){(GROUPS[c]||[]).forEach(a=>{h+=`<p class="eyebrow" style="margin-top:8px">${a[0]}</p>`;a[1].forEach(idx=>{h+=card(exL[idx])})})}
   else{let ph=0;exL.forEach(ex=>{const f=ex.core?4:ex.iso?3:2;if(f!==ph){ph=f;h+=`<p class="eyebrow" style="margin-top:8px">Fase ${f===4?(c==='B'||c==='D'?4:3):f} · ${f===2?'Compostos pesados (grandes → pequenos)':f===3?'Isolamento':'Core'}</p>`}h+=card(ex)})}
   h+=`</div></div>`;
@@ -1032,7 +1050,7 @@ function vPlano(){
   <li><b>Ordem de cada treino:</b> ${FLAV==='mary'?'1) ativação, 2) por músculo — o composto e logo o isolado desse músculo, antes de passar ao seguinte, 3) core no fim.':'1) ativação leve, 2) compostos pesados, do músculo grande (peito, costas, coxas) para o pequeno (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.'}</li>
   <li><b>Esforço:</b> começa com 3 repetições em reserva (RIR), depois 2 e, quando recuperado, 1–2. Regista a reserva na última série; não precisas de procurar a falha.</li>
   <li><b>Volume e recuperação:</b> as séries não aumentam só por mudar a semana. Se estás cansado, a app reduz o treino proposto; preserva sempre as séries que já escreveste.</li>
-  <li><b>Máquinas por blocos:</b> há várias variantes para o mesmo grupo muscular. A app dá prioridade a máquinas e cabos quando disponíveis, mantém os compostos por 6 sessões e os isolados/core por 4. Pode antecipar uma troca após 3 registos completos com carga e reserva comparáveis sem mais repetições na primeira série. Um registo genérico do relógio não avança estes blocos.</li>
+  <li><b>Variação dos exercícios:</b> ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados/core, com revisão após 3 registos comparáveis sem progresso.':'O calendário do plano define as variantes: isolados e core mudam semanalmente; compostos a cada duas semanas de progressão. A semana 5 mantém as variantes da semana 4 para reduzir o esforço. O ciclo seguinte continua a rotação. Os treinos A/B/C/D seguem o histórico e as cargas continuam separadas por exercício.'}</li>
   <li><b>Progressão dupla:</b> atinge o topo da faixa em todas as séries com a mesma carga e pelo menos 1 repetição em reserva antes de subir o menor incremento previsto. Os kg não passam de uma máquina para outra.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
   <li><b>Redução de esforço:</b> a 5.ª semana propõe metade das séries e −10% de carga. É uma estrutura de base; a recuperação de cada dia também conta.</li>
@@ -1163,6 +1181,7 @@ document.addEventListener('input',e=>{const el=e.target;
   else return;save();if(S.setup)refreshKV()}
 });
 document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
+ if(id==='plan-week'){const offset=Number(v);if(Number.isInteger(offset)&&offset>=0&&offset<=4){ui.planWeekOffset=offset;render()}return}
  if(id==='samsung-file'){if(e.target.files&&e.target.files[0])selectSamsungFile(e.target.files[0]);return}
  if(e.target.dataset.rir){const next=JSON.parse(JSON.stringify(S)),d=next.drafts[ui.code];if(!d)return;d.rir=d.rir||{};const value=v===''?null:Number(v);if(value!==null&&(!Number.isInteger(value)||value<0||value>4))return;d.rir[e.target.dataset.rir]=value;if(save(next))render();return;}
  if(id==='readiness'){if(!['normal','tired','pain'].includes(v))return;const next=JSON.parse(JSON.stringify(S));next.drafts[ui.code].readiness=v;if(save(next))render();return;}
