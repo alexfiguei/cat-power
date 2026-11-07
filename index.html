@@ -16,7 +16,13 @@
   document.querySelector('link[rel=manifest]').href='manifest-mary.webmanifest';
   document.querySelectorAll('link[rel=icon],link[rel=apple-touch-icon]').forEach(function(x){x.href='icons/mary-192.png'})}})();
 </script>
-<style>:root{color-scheme:light;--sat:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px));--sab:max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px));--sal:max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px));--sar:max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px));padding-top:var(--sat);padding-bottom:var(--sab)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}</style>
+<style>:root{color-scheme:light;--sat:max(env(safe-area-inset-top,0px),var(--safe-area-inset-top,0px));--sab:max(env(safe-area-inset-bottom,0px),var(--safe-area-inset-bottom,0px));--sal:max(env(safe-area-inset-left,0px),var(--safe-area-inset-left,0px));--sar:max(env(safe-area-inset-right,0px),var(--safe-area-inset-right,0px));padding-top:var(--sat);padding-bottom:var(--sab)}body{margin:0}img{max-width:100%}[hidden]{display:none!important}.load-advice[data-tone=green]{border-left:4px solid #238244}
+.load-advice[data-tone=red]{border-left:4px solid #ce3843}
+.load-advice:not([data-tone=neutral]) b::before{content:'';display:inline-block;width:.65em;height:.65em;border-radius:50%;margin-right:.5em;background:#ca3643;animation:load-pulse 1.8s ease-in-out infinite alternate}
+.load-advice[data-tone=green] b::before{background:#238244}
+@keyframes load-pulse{to{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.load-advice b::before{animation:none!important}}
+</style>
 <title>Cat Power</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -232,6 +238,12 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 #timer.over{background:var(--ok)}
 #toast{position:fixed;z-index:40;left:50%;top:calc(14px + var(--sat));transform:translateX(-50%);background:var(--ink);color:var(--bg);padding:10px 16px;border-radius:999px;font-weight:600;font-size:.95rem;max-width:90vw}
 @media (prefers-reduced-motion:reduce){#t-bar{transition:none}}
+.load-advice[data-tone=green]{border-left:4px solid #238244}
+.load-advice[data-tone=red]{border-left:4px solid #ce3843}
+.load-advice:not([data-tone=neutral]) b::before{content:'';display:inline-block;width:.65em;height:.65em;border-radius:50%;margin-right:.5em;background:#ca3643;animation:load-pulse 1.8s ease-in-out infinite alternate}
+.load-advice[data-tone=green] b::before{background:#238244}
+@keyframes load-pulse{to{opacity:.35}}
+@media(prefers-reduced-motion:reduce){.load-advice b::before{animation:none!important}}
 </style>
 </head>
 <body>
@@ -260,12 +272,12 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
  <div class="photo-tools" style="margin-top:12px"><button data-act="photo-prev">← Início</button><span id="photo-position"></span><button data-act="photo-next">Fim →</button></div>
 </dialog>
 
-<script src="photo-gesture.js"></script>
+<script src="spotify.js"></script><script src="load-guidance.js"></script><script src="photo-gesture.js"></script>
 <script src="jszip.min.js"></script>
 <script>
 /* ---------- DADOS DO PLANO ---------- */
 /* Cada exercício é um posto com variantes para o mesmo grupo muscular.
-   Na Cat Power, isolados/core variam semanalmente e compostos a cada duas semanas de treino.
+   Os exercícios rodam todas as semanas dentro do mesmo grupo muscular.
    A quinta semana mantém as variantes da quarta, com menos esforço.
    iso = exercício de isolamento. img = há fotos da variante. */
 const SESS={
@@ -531,14 +543,10 @@ function trainingWeekIndex(){const days=(Date.parse(TODAY)-Date.parse(S.start))/
 function weekStart(index){const start=Date.parse(S.start);return new Date((Number.isFinite(start)?start:Date.parse(TODAY))+index*7*864e5).toISOString().slice(0,10);}
 function variantChoice(code,slot,week=trainingWeekIndex()){
  if(FLAV==='mary')return blockVariantChoice(code,slot);
- const sl=SESS[code].ex[slot],cycle=Math.floor(week/5),phase=week%5;
+ const sl=SESS[code].ex[slot];
  const sequence=sl.v.map((v,i)=>i).sort((a,b)=>Number(machineVariant(sl.v[b]))-Number(machineVariant(sl.v[a])));
- // Four progression weeks, followed by the same variants in the reduced-effort week.
- const step=cycle*4+Math.min(phase,3),block=sl.iso||sl.core?step:Math.floor(step/2),vi=sequence[block%sequence.length];
- const previousStep=week?Math.floor((week-1)/5)*4+Math.min((week-1)%5,3):0;
- const previousBlock=sl.iso||sl.core?previousStep:Math.floor(previousStep/2);
- const changed=week>0&&sequence[previousBlock%sequence.length]!==vi;
- return{vi,changed,why:phase===4?'Semana leve: mantém a variante da semana anterior e reduz o esforço.':changed?'Nova variante prevista para esta semana, para o mesmo grupo muscular. Começa com a carga própria desta variante.':sl.iso||sl.core?'Variante desta semana. Na próxima semana de progressão, muda para a seguinte.':'Composto mantido durante duas semanas de progressão para acompanhar a evolução da carga.'};
+ const vi=sequence[week%sequence.length];
+ return {vi,changed:week>0&&sequence.length>1,why:week%5===4?'Semana leve. Usa a variante desta semana com menos séries e margem de esforço.':'Variante desta semana para o mesmo grupo muscular. Regista a carga própria deste exercício.'};
 }
 function draftHasEntries(d){return !!d&&Object.values(d.v||{}).some(rows=>rows.some(z=>z&&(z.r>0||z.kg>0||z.done)));}
 function marGoal(ex){const g=(typeof S!=='undefined'&&S&&S.profile)?S.profile.goal:null;if(FLAV!=='mary'||!g)return ex;
@@ -737,7 +745,8 @@ function saveWorkout(code){
   if(!sets.length)return;
   let prev=0;S.history.forEach(h=>{if(h.d===TODAY&&h.code===code)return;h.ex.forEach(e=>{if(e.id===ex.id)e.sets.forEach(z=>{if(z.kg>prev)prev=z.kg})})});
   const top=Math.max(...sets.map(z=>z.kg));if(prev>0&&top>prev)prs.push({id:ex.id,kg:top,prev});
-  const rir=d.rir&&d.rir[ex.id];exs.push({id:ex.id,sets,...(Number.isInteger(rir)?{rir}:{} )});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets,rir:Number.isInteger(rir)?rir:null});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
+  const context=FLAV==='mary'?{}:{station:currentStation(ex,d),condition:d.condition?.[ex.id]||'ok',readiness:d.readiness||'normal',deload:cycleWeek()===5};
+  const rir=d.rir&&d.rir[ex.id];exs.push({id:ex.id,sets,...context,...(Number.isInteger(rir)?{rir}:{} )});next.logs[ex.id]=(next.logs[ex.id]||[]).filter(l=>l.d!==TODAY);next.logs[ex.id].push({d:TODAY,sets,...context,rir:Number.isInteger(rir)?rir:null});if(next.logs[ex.id].length>30)next.logs[ex.id].shift();
  });
  if(!exs.length){toast('Ainda não registaste nenhuma série');return false}
  const old=savedToday(code),rec=mkHist(TODAY,code,exs,d.t0||(old&&old.t0),Date.now());rec.prs=prs;rec.readiness=d.readiness||'normal';if(old&&old.watch)rec.watch=old.watch;if(old&&old.imageExerciseIds)rec.imageExerciseIds=[...old.imageExerciseIds];
@@ -963,11 +972,19 @@ if(FLAV==='mary'){(function(){
 
 function plannedSets(ex,d){return Math.max(cycleWeek()===5?Math.ceil(ex.sets/2):d.readiness==='tired'?Math.max(1,ex.sets-1):ex.sets,(d.v[ex.id]||[]).length)}
 function workoutComplete(code){const d=S.drafts[code];if(!d||d.date!==TODAY)return false;const exercises=exList(code);return exercises.length>0&&exercises.every(ex=>Array.from({length:plannedSets(ex,d)},(_,k)=>d.v[ex.id]?.[k]).every(s=>s&&s.done&&s.r>0))}
+function currentStation(ex,d){return d.stations?.[ex.id] ?? S.equipment?.[ex.id] ?? ''}
+function spotifyCard(){
+ if(FLAV==='mary')return '';
+ const url=spotifyPlaylist(S.spotifyPlaylist||'')||'';
+ return `<section class="card stack"><h3>Música para o treino</h3><a class="btn ghost" href="${url||'https://open.spotify.com/'}" target="_blank" rel="noopener noreferrer">${url?'Abrir a minha playlist':'Abrir Spotify'} ↗</a><details><summary>Configurar playlist</summary><label>Ligação do Spotify<input id="spotify-url" value="${safeText(url)}" type="url" placeholder="Cola a ligação da tua playlist"></label><button class="btn ghost sm" data-act="spotify-save">Guardar playlist</button></details></section>`;
+}
 function exCard(ex,i,wk,deload,d){
  const g=sugg(ex);let n=plannedSets(ex,d);
  const vals=d.v[ex.id]||[];
  n=Math.max(n,vals.length);
- const plan=coachPlan(ex,g,deload,n,vals);
+ const personal=FLAV!=='mary',station=currentStation(ex,d);
+ const advise=rows=>loadGuidance(ex,d,rows,S.logs[ex.id]||[],station,TODAY,deload);
+ const plan=personal?Array.from({length:n},(_,k)=>advise(vals.slice(0,k))):coachPlan(ex,g,deload,n,vals);
  let rows='';
  for(let k=0;k<n;k++){const v=vals[k]||{};const pre=plan[k]?plan[k].kg:null;
   rows+=`<div class="set ${v.done?'done':''}"><span class="set-n">${k+1}</span>
@@ -979,13 +996,16 @@ function exCard(ex,i,wk,deload,d){
 '</p>'}
  const nk=[...Array(n).keys()].find(k=>!(vals[k]&&vals[k].done));
  let tip='';
- if(nk!==undefined&&plan[nk]){const c=plan[nk];tip=`<p class="coach"><b>Treinador · série ${nk+1}:</b> <span class="up">${fmt(c.kg)} kg</span> × ${ex.reps[0]}–${ex.reps[1]}<br><small>${c.why}.</small></p>`}
+ if(personal){
+  const c=advise(vals);
+  tip=`<p class="coach load-advice" data-tone="${c.tone}" role="status" aria-live="polite"><b>${c.title}</b>${c.kg?' · '+fmt(c.kg)+' kg':''}<br><small>${c.why}</small></p>`;
+ }else if(nk!==undefined&&plan[nk]){const c=plan[nk];tip=`<p class="coach"><b>Treinador · série ${nk+1}:</b> <span class="up">${fmt(c.kg)} kg</span> × ${ex.reps[0]}–${ex.reps[1]}<br><small>${c.why}.</small></p>`}
  else if(nk!==undefined&&nk>0){tip=`<p class="coach"><b>Treinador:</b> escreve os kg da série anterior para eu sugerir a próxima.</p>`}
  else if(nk===undefined&&n>0&&plan[n-1]){const lv=vals[n-1]||{};const nx=lv.kg>0&&lv.r>0?coachNext(ex,lv):null;
   if(nx&&nx.kg>lv.kg)tip=`<p class="coach"><b>Treinador:</b> estava leve — da próxima vez começa com <span class="up">${fmt(nx.kg)} kg</span>.</p>`}
  const rir=d.rir&&d.rir[ex.id];
  return `<article class="ex"><div class="ex-head"><div><h3>${ex.n}</h3><p class="ex-meta num">${n} × ${ex.reps[0]}–${ex.reps[1]} reps · ${deload?'leve':d.readiness==='tired'?'3 RIR':rirTxt(wk,ex.iso).replace(' reps em reserva',' RIR')} · descanso ${restTxt(ex.rest)}</p><p class="ex-meta" style="font-size:.8rem">${ex.muscle} · variante ${ex.vi+1} de ${ex.nv}</p></div><span class="ex-idx">${pad(i+1)}</span></div>
- ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':FLAV==='mary'?'Bloco de progressão':'Variação semanal'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}<div class="sets">${rows}</div>${tip}
+ ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':FLAV==='mary'?'Bloco de progressão':'Variação semanal'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}${personal?`<label>Equipamento usado<input type="text" maxlength="60" data-station="${ex.id}" value="${safeText(station)}" placeholder="Ex. máquina 4 ou halteres"></label><label>Execução<select class="rotation-select" data-condition="${ex.id}">${[['ok','Controlada'],['form','Perdi a técnica'],['pain','Senti dor']].map(([v,t])=>`<option value="${v}" ${d.condition?.[ex.id]===v?'selected':''}>${t}</option>`).join('')}</select></label>`:''}<div class="sets">${rows}</div>${tip}
  <label>Reserva na última série (RIR)<select class="rotation-select" data-rir="${ex.id}" aria-label="Reserva na última série de ${ex.n}"><option value="">Ainda não registei</option>${[0,1,2,3,4].map(r=>`<option value="${r}" ${rir===r?'selected':''}>${r===0?'0 · não conseguia fazer mais nenhuma':r===4?'4 ou mais':r+' '+(r===1?'repetição':'repetições')+' em reserva'}</option>`).join('')}</select></label>
  <button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}">Trocar variante · ${ex.muscle}</button>
  ${ex.v.filter(v=>v.code && v.id!==ex.id).map(v=>`<button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}" data-target="${v.id}">Usar ${v.n}</button>`).join('')}
@@ -1052,14 +1072,15 @@ function workoutLetters(info,openCode){
 }
 function vHoje(){
  refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,info=nextTrainingInfo();
- const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${workoutLetters(info,code)}${liveWatchCard()}${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard(info)}</div>`;
+ const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${workoutLetters(info,code)}${liveWatchCard()}${spotifyCard()}${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard(info)}</div>`;
  const completed=S.history.filter(x=>x.d<=TODAY),done=completed.length,last7=completed.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=[...completed].sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).slice(-1)[0];
  let h=`<div class="stack">${postContext().time?'<button class="btn" data-act="post-open">🍽 Refeições depois do treino de hoje</button>':''}
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
  ${workoutLetters(info,code)}
  ${liveWatchCard()}
+ ${spotifyCard()}
  ${recommendationCard(info)}
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Novas variantes todas as semanas de progressão: isolados e core semanalmente; compostos a cada duas semanas. Vê as próximas semanas no Plano.'}`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular. Vê as próximas semanas no Plano.'}`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
@@ -1175,7 +1196,7 @@ function vPlano(){
  let h=`<div class="stack"><div><p class="eyebrow">4 treinos em rotação · ciclo de 5 semanas</p><h1>O teu plano</h1></div>
  <div class="card stack"><h3>Sem dias fixos</h3><div class="sched">${ORDER.map(c=>`<div class="srow"><b>${c}</b><i style="background:var(--${SESS[c].cls})"></i><span>${SESS[c].name}</span></div>`).join('')}</div>
   <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div>`;
- if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve: as variantes da semana 4 mantêm-se, com metade das séries.':'Isolados e core mudam semanalmente; os compostos mudam a cada duas semanas de progressão.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
+ if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve com as variantes desta semana e metade das séries.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
  if(FLAV!=='mary') h+=`<section class="card stack"><h2>Novas máquinas de hipertrofia</h2><p>Abre uma máquina para veres a execução. Em Hoje, podes escolhê-la antes de registar a primeira série desse exercício.</p>${novasMaquinas.map(v=>{const sl=SESS[v.code].ex[v.slot];return `<details><summary>Treino ${v.code} · ${v.n}</summary><p class="ex-meta num">${previewCycleWeek===5?Math.ceil(sl.sets/2):sl.sets} × ${sl.reps.join('–')} reps · descanso ${restTxt(sl.iso?sl.rest:Math.max(120,sl.rest))}</p>${pics(v)}<ul>${v.cues.map(c=>`<li>${c}</li>`).join('')}</ul></details>`}).join('')}</section>`;
  ORDER.forEach(c=>{const s=SESS[c];
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
@@ -1190,8 +1211,8 @@ function vPlano(){
   <li><b>Ordem de cada treino:</b> ${FLAV==='mary'?'1) ativação, 2) por músculo — o composto e logo o isolado desse músculo, antes de passar ao seguinte, 3) core no fim.':'1) ativação leve, 2) compostos pesados, do músculo grande (peito, costas, coxas) para o pequeno (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.'}</li>
   <li><b>Esforço:</b> começa com 3 repetições em reserva (RIR), depois 2 e, quando recuperado, 1–2. Regista a reserva na última série; não precisas de procurar a falha.</li>
   <li><b>Volume e recuperação:</b> as séries não aumentam só por mudar a semana. Se estás cansado, a app reduz o treino proposto; preserva sempre as séries que já escreveste.</li>
-  <li><b>Variação dos exercícios:</b> ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados/core, com revisão após 3 registos comparáveis sem progresso.':'O calendário do plano define as variantes: isolados e core mudam semanalmente; compostos a cada duas semanas de progressão. A semana 5 mantém as variantes da semana 4 para reduzir o esforço. O ciclo seguinte continua a rotação. Os treinos A/B/C/D seguem o histórico e as cargas continuam separadas por exercício.'}</li>
-  <li><b>Progressão dupla:</b> atinge o topo da faixa em todas as séries com a mesma carga e pelo menos 1 repetição em reserva antes de subir o menor incremento previsto. Os kg não passam de uma máquina para outra.</li>
+  <li><b>Variação dos exercícios:</b> ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados/core, com revisão após 3 registos comparáveis sem progresso.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular. O ciclo seguinte continua a rotação. Os treinos A/B/C/D seguem o histórico e as cargas continuam separadas por exercício.'}</li>
+  <li><b>Progressão dupla:</b> ${FLAV==='mary'?'Atinge o topo da faixa com pelo menos uma repetição em reserva.':'Para subir, regista duas sessões no mesmo equipamento, com a mesma carga, todas as séries no topo da faixa e duas ou mais repetições em reserva.'} Os kg não passam de uma máquina para outra.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
   <li><b>Redução de esforço:</b> a 5.ª semana propõe metade das séries e −10% de carga. É uma estrutura de base; a recuperação de cada dia também conta.</li>
   <li><b>Dor:</b> ardor no músculo é normal. Dor aguda na articulação = para e troca o exercício.</li>
@@ -1328,6 +1349,13 @@ document.addEventListener('change',e=>{const id=e.target.id,v=e.target.value;
  if(id==='plan-week'){const offset=Number(v);if(Number.isInteger(offset)&&offset>=0&&offset<=4){ui.planWeekOffset=offset;render()}return}
  if(id==='samsung-file'){if(e.target.files&&e.target.files[0])selectSamsungFile(e.target.files[0]);return}
  if(e.target.dataset.rir){const next=JSON.parse(JSON.stringify(S)),d=next.drafts[ui.code];if(!d)return;d.rir=d.rir||{};const value=v===''?null:Number(v);if(value!==null&&(!Number.isInteger(value)||value<0||value>4))return;d.rir[e.target.dataset.rir]=value;if(save(next))render();return;}
+ if(e.target.dataset.station || e.target.dataset.condition){
+  const station=e.target.dataset.station,exId=station||e.target.dataset.condition;
+  const next=JSON.parse(JSON.stringify(S)),d=next.drafts[ui.code];if(!d)return;
+  if(station){const value=v.trim().slice(0,60);(d.stations||={})[exId]=value;(next.equipment||={})[exId]=value;}
+  else if(['ok','form','pain'].includes(v)){(d.condition||={})[exId]=v;}else return;
+  if(save(next))render();return;
+ }
  if(id==='readiness'){if(!['normal','tired','pain'].includes(v))return;const next=JSON.parse(JSON.stringify(S));next.drafts[ui.code].readiness=v;if(save(next))render();return;}
  if(id==='p-act')S.profile.act=parseFloat(v);else if(id==='p-sex')S.profile.sex=v;else if(id==='p-goal')S.profile.goal=v;else return;
  save();if(S.setup)render()});
@@ -1338,6 +1366,7 @@ document.addEventListener('click',e=>{
  if(e.target===$('#photo-dialog')){$('#photo-dialog').close();return}
  const tb=e.target.closest('nav.tabs button');if(tb){if(tb.dataset.tab==='hoje'&&ui.tab!=='hoje'&&!ui.editing)ui.manualChoice=false;ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
+ if(a==='spotify-save'){const url=spotifyPlaylist($('#spotify-url').value);if(url===null){toast('Usa uma ligação de playlist do Spotify.');return}if(save({...S,spotifyPlaylist:url})){render();toast(url?'Playlist guardada':'Playlist removida')}return}
  if(a==='post-open'){ui.tab='refeicoes';render();document.getElementById('post-workout')?.scrollIntoView?.({behavior:'smooth'});return}
  if(a==='watch-live-open'){openLiveWatch();return}
  if(a==='post-auto'){const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postTime:null,postChoice:null};if(save(next))render();return}
@@ -1355,7 +1384,7 @@ document.addEventListener('click',e=>{
  else if(a==='photo-prev'||a==='photo-next'){PHOTO.pos=a==='photo-next'?1:0;PHOTO.zoom=1;updatePhoto()}
  else if(a==='image-add'){const id=document.getElementById(b.dataset.select).value;if(!EXN[id]){toast('Escolhe o exercício realizado');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.imageExerciseIds=[...new Set([...(h.imageExerciseIds||[]),id])];if(save(next)){render();toast('Imagem associada ao registo ✓')}}
  else if(a==='history'){ui.tab='historico';render();window.scrollTo(0,0)}
- else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,readiness:h.readiness||'normal',rir:Object.fromEntries(h.ex.filter(e=>Number.isInteger(e.rir)).map(e=>[e.id,e.rir])),v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
+ else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,readiness:h.readiness||'normal',stations:Object.fromEntries(h.ex.map(e=>[e.id,e.station||''])),condition:Object.fromEntries(h.ex.map(e=>[e.id,e.condition||'ok'])),rir:Object.fromEntries(h.ex.filter(e=>Number.isInteger(e.rir)).map(e=>[e.id,e.rir])),v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
  else if(a==='done'){
   const code=ui.code;const d=draft(code),id=b.dataset.ex,k=+b.dataset.k;if(!d.t0)d.t0=Date.now();const arr=d.v[id]=d.v[id]||[];const v=arr[k]=arr[k]||{};
   if(v.done){v.done=false;save();render();return}

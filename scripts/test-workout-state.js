@@ -24,7 +24,7 @@ function app(storage = new Map(), flavor = 'cat') {
     async queryAggregated(query) { control.energyQueries.push(query); if(control.energyErrors.includes(query.dataType))throw Error('permission denied');const value=control.energy[query.dataType]; return { aggregatedData: value==null?[]:[{value}] }; }
   };
   const context = {
-    FLAV: flavor, APPNAME: 'Cat Power', Date: TestDate, console, JSZip: require('jszip'), Uint8Array, ArrayBuffer,
+    FLAV: flavor, APPNAME: 'Cat Power', URL, Date: TestDate, console, JSZip: require('jszip'), Uint8Array, ArrayBuffer,
     location: { hash: '', search: '' },
     document: { querySelector: node, getElementById: id => node('#'+id), querySelectorAll: () => [], addEventListener: (type, cb) => (listeners[type] ||= []).push(cb) },
     localStorage: { getItem: key => storage.get(key) || null, setItem: (key, value) => { if (control.failStore) throw Error('quota'); storage.set(key, value); } },
@@ -32,7 +32,7 @@ function app(storage = new Map(), flavor = 'cat') {
     setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, scrollTo() {},
   };
   context.window = context;
-  vm.createContext(context); vm.runInContext(fs.readFileSync('photo-gesture.js', 'utf8'),context); vm.runInContext(source, context);
+  vm.createContext(context); vm.runInContext(fs.readFileSync('photo-gesture.js', 'utf8'),context); for(const file of ['spotify.js','load-guidance.js'])vm.runInContext(fs.readFileSync(file,'utf8'),context); vm.runInContext(source, context);
   return { control, storage, nodes, read: code => vm.runInContext(code, context),
     click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })),
     input: target => listeners.input.forEach(cb => cb({target})),
@@ -303,15 +303,14 @@ function workout(id = 'strength', overrides = {}) {
   for(const code of ['A','B','C','D']){
     const weeks=Array.from({length:11},(_,week)=>JSON.parse(weekly.read(`JSON.stringify(exList('${code}',${week}))`)));
     for(let w=1;w<weeks.length;w++){
-      if(w%5===4)assert.deepEqual(weeks[w].map(e=>e.id),weeks[w-1].map(e=>e.id),'deload keeps week 4 variants');
-      else assert.notDeepEqual(weeks[w].map(e=>e.id),weeks[w-1].map(e=>e.id),'every progression week has different exercises');
+      assert.notDeepEqual(weeks[w].map(e=>e.id),weeks[w-1].map(e=>e.id));
       weeks[w].forEach((ex,i)=>{
         assert.equal(ex.muscle,weeks[0][i].muscle);
         assert.equal(ex.sets,weeks[0][i].sets);
         for(const pos of [0,1])assert.ok(fs.existsSync(`img/${ex.id}_${pos}.jpg`),ex.id+' has photos');
       });
     }
-    assert.equal(weeks[0][0].id,weeks[1][0].id,'compound stays for two weeks');
+    assert.notEqual(weeks[0][0].id,weeks[1][0].id,'compound changes weekly');
     assert.notEqual(weeks[1][0].id,weeks[2][0].id,'compound changes in week 3');
   }
   assert.equal(weekly.read('JSON.stringify(S)'),previewBefore,'previews do not mutate data');
@@ -370,6 +369,30 @@ function workout(id = 'strength', overrides = {}) {
   const progress=app();progress.read(`S.logs.sup_incl_maq=[{d:'2026-10-26',rir:2,sets:Array.from({length:4},()=>({kg:20,r:10}))}]`);
   assert.equal(progress.read('sugg(exList("A")[0]).hit'),true);
   progress.read('S.logs.sup_incl_maq[0].rir=0');assert.equal(progress.read('sugg(exList("A")[0]).hit'),false);
+  const personal=app();seedDraft(personal);
+  const id=personal.read("exList('A')[0].id");
+  personal.change({id:'',value:'Prensa 4',dataset:{station:id}});
+  personal.read(`const exercise=exList('A')[0],day=draft('A'),station=currentStation(exercise,day);
+    const full=Array.from({length:exercise.sets},()=>({kg:30,r:exercise.reps[1],done:true}));
+    const one={d:'2026-10-19',rir:2,sets:full,station,readiness:'normal'};
+    const two={...one,d:'2026-10-12'};
+    const signal=(rows,logs,rest=false)=>loadGuidance(exercise,day,rows,logs,station,TODAY,rest);`);
+  assert.equal(personal.read('signal([],[one]).tone'),'neutral');
+  assert.equal(personal.read('signal([],[one,two]).tone'),'green');
+  assert.equal(personal.read('signal([],[one,{...two,station:"Outra"}]).tone'),'neutral');
+  assert.equal(personal.read('signal([],[one,two],true).tone'),'red');
+  assert.equal(personal.read('signal([{kg:20,r:1,done:true}],[one,two]).tone'),'red');
+  personal.change({id:'',value:'2',dataset:{rir:id}});
+  assert.equal(personal.read("loadGuidance(exercise,draft('A'),full,[one],station,TODAY,false).tone"),'green');
+  personal.change({id:'',value:'pain',dataset:{condition:id}});
+  assert.equal(personal.read("loadGuidance(exercise,draft('A'),full,[one,two],station,TODAY,false).kg"),null);
+  assert.match(personal.read('vHoje()'),/data-tone="red"/);
+  personal.nodes.get('#spotify-url') || personal.read("document.getElementById('spotify-url')");
+  personal.nodes.get('#spotify-url').value='spotify:playlist:1234567890123456789012';
+  personal.click('spotify-save');assert.match(app(personal.storage).read('spotifyCard()'),/open.spotify.com\/playlist\/1234567890123456789012/);
+  personal.read("saveWorkout('A')");personal.click('edit-saved',{code:'A'});
+  assert.equal(personal.read("currentStation(exercise,draft('A'))"),'Prensa 4');
+  assert.equal(personal.read("draft('A').condition[exercise.id]"),'pain');
   // Nutrition reviews need repeat measurements, adherence, a bounded step and a 14-day cooldown.
   const food=app();assert.equal(food.read('nutritionReview().delta'),0);
   food.read(`S.weights=['2026-10-12','2026-10-14','2026-10-17','2026-10-20','2026-10-23','2026-10-25','2026-10-27'].map(d=>({d,kg:86}));S.profile.goal='ganhar'`);

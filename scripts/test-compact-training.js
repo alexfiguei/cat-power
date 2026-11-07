@@ -1,7 +1,7 @@
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const vm = require('node:vm');
-const api = vm.runInNewContext(fs.readFileSync('compact-training.js','utf8')+
+const api = vm.runInNewContext(fs.readFileSync('spotify.js','utf8')+fs.readFileSync('compact-training.js','utf8')+
   '\n;({exercises,weeks,phaseFor,phaseForSession,lisbonDate,advice,spotifyPlaylist})',{URL,Intl,Date});
 const {weeks,phaseFor,advice,spotifyPlaylist} = api;
 for (const [i,week] of weeks.entries()) {
