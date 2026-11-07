@@ -203,22 +203,31 @@ function workout(id = 'strength', overrides = {}) {
   function letter(html,code){return html.match(new RegExp('<button class="codebtn[^>]*data-c="'+code+'"[^>]*>[\\s\\S]*?</button>'))?.[0]||''}
   const initial=rotation.read('vHoje()');
   assert.match(letter(initial,'A'),/>Último</);
-  assert.match(letter(initial,'B'),/next-training/);
+  assert.match(letter(initial,'B'),/training-today/);
   assert.match(letter(initial,'B'),/aria-pressed="true"/);
-  assert.match(letter(initial,'B'),/>Próximo</);
+  assert.match(letter(initial,'B'),/>Treino de hoje</);
   rotation.click('code',{c:'D'});assert.equal(rotation.read('nextCode()'), 'B');
-  assert.match(letter(rotation.read('vHoje()'),'B'),/>Próximo</);
-  assert.doesNotMatch(letter(rotation.read('vHoje()'),'D'),/next-training/);
+  assert.match(letter(rotation.read('vHoje()'),'B'),/>Treino de hoje</);
+  assert.doesNotMatch(letter(rotation.read('vHoje()'),'D'),/training-today/);
   rotation.read(`S.history.push(mkHist(TODAY,'B',[],Date.now()-3600000,Date.now()-1))`);
   assert.equal(rotation.read('suggested()'), 'C');
   rotation.read('ui.manualChoice=false');
   const completedScreen=rotation.read('vHoje()');
-  assert.match(letter(completedScreen,'B'),/>Último</);
+  assert.match(letter(completedScreen,'B'),/>Feito hoje</);
   assert.match(letter(completedScreen,'C'),/>Próximo</);
+  const overnight=app();
+  overnight.read("TODAY='2026-10-26';S.history=[mkHist(TODAY,'B',[],1,2)];refreshTrainingDay()");
+  assert.match(letter(overnight.read('vHoje()'),'C'),/>Treino de hoje</);
+  assert.doesNotMatch(completedScreen,/class="codebtn[^"]*training-today/);
+  const activeDay=app();
+  seedDraft(activeDay);
+  activeDay.read("S.history=[mkHist('2026-10-25','C',[],1,2)]");
+  assert.match(letter(activeDay.read('vHoje()'),'A'),/training-today/);
+  assert.match(activeDay.read('recommendationCard()'),/data-c="A"/);
 
   rotation.read(`S.history.push({...mkHist(TODAY,null,[],Date.now()-1000,Date.now()),source:'watch',watch:{id:'unknown',type:'STRENGTH_TRAINING',title:'Musculação'}})`);
   assert.equal(rotation.read('suggested()'), null);
-  assert.doesNotMatch(rotation.read('vHoje()'),/class="codebtn[^"]*next-training/);
+  assert.doesNotMatch(rotation.read('vHoje()'),/class="codebtn[^"]*training-today/);
   assert.match(rotation.read('recommendationCard()'), /Falta identificar o último treino/);
   rotation.nodes.set('#classify', {value:'C'});
   rotation.click('rotation-save',{select:'classify',record:encodeURIComponent('watch:unknown')});

@@ -96,9 +96,12 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .pics figcaption{position:absolute;left:6px;top:6px;background:rgba(21,32,42,.82);color:#fff;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:6px}
 .vid{font-size:.9rem;font-weight:600;color:var(--blue)}
 .codebtn.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
-.codebtn.next-training{background:#125438;color:white;border-color:#125438;box-shadow:inset 0 0 0 1px #125438}
-.codebtn.next-training small{color:white}
-.codebtn.next-training .dot{outline:1px solid white}
+.codebtn.training-today{background:#ae1530;color:#fff;border-color:#991129;box-shadow:inset 0 0 0 1px #991129}
+.codebtn.training-today small{color:#fff;line-height:1.2}
+.codebtn.training-today .dot{background:#fff}
+@keyframes training-today-pulse{50%{background:#85132a;box-shadow:0 0 0 4px rgba(174,21,48,.28)}}
+@media (prefers-reduced-motion:no-preference){.codebtn.training-today{animation:training-today-pulse 1.8s ease-in-out infinite}}
+.dot{outline:1px solid white}
 @keyframes next-training-pulse{50%{box-shadow:0 0 0 4px rgba(18,84,56,.23)}}
 @media (prefers-reduced-motion:no-preference){.codebtn.next-training{animation:next-training-pulse 1.8s ease-in-out 2}}
 .dot{width:12px;height:12px;border-radius:50%}
@@ -673,7 +676,7 @@ const GOALS={
 const $=s=>document.querySelector(s);
 const pad=n=>String(n).padStart(2,'0');
 const iso=d=>`${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
-const TODAY=iso(new Date());
+let TODAY=iso(new Date());
 const fmt=n=>String(Math.round(n*100)/100).replace('.',',');
 const num=v=>{const x=parseFloat(String(v).replace(',','.'));return isFinite(x)?x:null};
 const dshort=s=>s.slice(8,10)+'/'+s.slice(5,7);
@@ -720,7 +723,7 @@ function suggested(){return nextTrainingInfo().code}
 function nextCode(){return suggested()}
 const ui={tab:TABS.includes(location.hash.slice(1))?location.hash.slice(1):'hoje',code:null,editing:false,manualChoice:false,planWeekOffset:0};
 function refreshWorkoutSelection(){if(ui.editing||ui.manualChoice)return;
- const active=Object.keys(S.drafts).find(c=>SESS[c]&&S.drafts[c].date===TODAY&&Object.values(S.drafts[c].v||{}).some(sets=>sets.some(s=>s&&(s.done||s.r>0||s.kg>0))));
+ const active=activeTrainingToday();
  const saved=S.history.filter(h=>h.d===TODAY&&h.source!=='watch'&&ORDER.includes(h.code)).sort((a,b)=>(a.t1||0)-(b.t1||0)).slice(-1)[0];
  ui.code=active||(saved&&saved.code)||suggested();
 }
@@ -995,18 +998,26 @@ function savedWorkoutCard(h){const st=hStats(h);
  <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
 }
 function todayWatchCard(){return NATIVE?`<div class="card stack"><div class="ex-head"><h3>Relógio · hoje</h3>${watchSyncButton()}</div>${watchCard(TODAY)}${watchSyncStatus()}</div>`:''}
+function activeTrainingToday(){
+ return ORDER.find(c=>S.drafts[c]?.date===TODAY&&draftHasEntries(S.drafts[c]));
+}
+function trainingForToday(info){
+ if(info.last?.d===TODAY)return null;
+ return activeTrainingToday()||info.code;
+}
 function workoutLetters(info,openCode){
  const last=info.last?rotationCode(info.last):null;
+ const todayCode=trainingForToday(info);
  const buttons=ORDER.map(c=>{
-  const next=c===info.code;
-  const role=next?'Próximo':c===last?'Último':'';
+  const isToday=c===todayCode;
+  const role=isToday?'Treino de hoje':c===last?(info.last.d===TODAY?'Feito hoje':'Último'):c===info.code?'Próximo':'';
   const open=c===openCode;
   const inProgress=S.drafts[c]?.date===TODAY&&draftHasEntries(S.drafts[c]);
   const secondary=inProgress?'Em curso':open&&!role?'A ver':'';
   const labels=[role,secondary].filter(Boolean);
-  return `<button class="codebtn${open?' sel':''}${next?' next-training':''}" data-act="code" data-c="${c}" aria-pressed="${open}" aria-label="Treino ${c} · ${[SESS[c].name,...labels].join(' · ')}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${labels.map(label=>`<small>${label}</small>`).join('')}</button>`;
+  return `<button class="codebtn${open?' sel':''}${isToday?' training-today':''}" data-act="code" data-c="${c}" aria-pressed="${open}" aria-label="Treino ${c} · ${[SESS[c].name,...labels].join(' · ')}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${labels.map(label=>`<small>${label}</small>`).join('')}</button>`;
  });
- return `<p class="eyebrow">Próximo treino pelo teu histórico</p><div class="codes">${buttons.join('')}</div>`;
+ return `<p class="eyebrow">O teu treino de hoje</p><div class="codes">${buttons.join('')}</div>`;
 }
 function vHoje(){
  refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,info=nextTrainingInfo();
@@ -1052,8 +1063,10 @@ function historyKey(h){return h.source==='watch'?'watch:'+h.watch.id:'session:'+
 function rotationSelector(h,id){const selected=h.rotationCode==='none'?'none':rotationCode(h)||'';
  return `<div class="stack" style="margin-top:12px"><label for="${id}">Que treino realizaste?</label><select class="rotation-select" id="${id}"><option value="">Selecionar o treino realizado</option>${ORDER.map(c=>`<option value="${c}" ${selected===c?'selected':''}>${c} · ${SESS[c].name}</option>`).join('')}<option value="none" ${selected==='none'?'selected':''}>Fora do plano · não altera a sequência</option></select><button class="btn ghost sm" data-act="rotation-save" data-record="${encodeURIComponent(historyKey(h))}" data-select="${id}">Confirmar treino realizado</button></div>`;
 }
-function recommendationCard(info=nextTrainingInfo()){if(!info.code)return `<section class="card stack"><p class="pill warn">Falta identificar o último treino</p><h2>Acertar o próximo treino</h2><p>O relógio registou musculação a ${dshort(info.last.d)}. Indica qual dos treinos fizeste para atualizar a sequência.</p>${rotationSelector(info.last,'rotation-pending')}</section>`;
- return `<section class="card stack"><p class="eyebrow">Próximo treino sugerido</p><h2>${info.code} · ${SESS[info.code].name}</h2><p class="muted">${info.last?`Com base no treino ${rotationCode(info.last)} realizado a ${dshort(info.last.d)}.`:'Primeira sessão: ainda não há um treino do plano identificado no histórico.'}</p><button class="btn ghost sm" data-act="next-workout">Ver próximo treino</button></section>`;
+function recommendationCard(info=nextTrainingInfo()){if(!info.code&&!trainingForToday(info))return `<section class="card stack"><p class="pill warn">Falta identificar o último treino</p><h2>Acertar o próximo treino</h2><p>O relógio registou musculação a ${dshort(info.last.d)}. Indica qual dos treinos fizeste para atualizar a sequência.</p>${rotationSelector(info.last,'rotation-pending')}</section>`;
+ const todayCode=trainingForToday(info),code=todayCode||info.code;
+ const reason=todayCode&&activeTrainingToday()?'Já começaste a registar séries neste treino.':info.last?`Com base no treino ${rotationCode(info.last)} realizado a ${dshort(info.last.d)}.`:'Primeira sessão do teu plano.';
+ return `<section class="card stack"><p class="eyebrow">${todayCode?'Treino de hoje':'Próxima sessão'}</p><h2>${code} · ${SESS[code].name}</h2><p class="muted">${reason}</p><button class="btn ghost sm" data-act="next-workout" data-c="${code}">${todayCode?'Ver treino de hoje':'Ver próxima sessão'}</button></section>`;
 }
 const PHOTO={id:null,pos:0,zoom:1};
 function updatePhoto(){const name=EXN[PHOTO.id];if(!name)return;const img=$('#photo-large');img.src=`img/${PHOTO.id}_${PHOTO.pos}.jpg`;img.alt=name+' — posição '+(PHOTO.pos?'final':'inicial');img.style.width=PHOTO.zoom*100+'%';$('#photo-title').textContent=name;$('#photo-position').textContent=PHOTO.pos?'Posição final':'Posição inicial';}
@@ -1301,7 +1314,7 @@ document.addEventListener('click',e=>{
   if(!chosen)return;
   const next=JSON.parse(JSON.stringify(S)),target=next.drafts[code];target.ids=current.map(e=>e.id);target.ids[slot]=chosen.id;
   if(save(next)){render();toast('Variante trocada para o mesmo grupo muscular. Usa a carga própria desta versão.');}}
- else if(a==='next-workout'){const code=suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
+ else if(a==='next-workout'){const code=ORDER.includes(b.dataset.c)?b.dataset.c:suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
  else if(a==='rotation-save'){const code=document.getElementById(b.dataset.select).value;if(!ORDER.includes(code)&&code!=='none'){toast('Indica o treino que realizaste');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.rotationCode=code;if(save(next)){ui.manualChoice=false;render();const n=nextCode();toast(n?`Próximo treino: ${n} · ${SESS[n].name}`:'Treino confirmado. Falta identificar a sessão mais recente.')}}
  else if(a==='photo-open'){openPhoto(b.dataset.ex,+b.dataset.pos)}
  else if(a==='photo-close'){$('#photo-dialog').close()}
@@ -1365,7 +1378,14 @@ if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hid
 render();
 document.addEventListener('cancel',e=>{if(e.target.id==='samsung-file'){SAMSUNG_PICKER=false;render()}},true);
 function autoWatch(){if(!SAMSUNG_PICKER&&!SAMSUNG_LOADING&&NATIVE&&S.hc.on)syncWatch(TODAY,true,S.hc.monthImported&&S.hc.detailVersion===2?3:30)}
-autoWatch();document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')autoWatch()});
+function refreshTrainingDay(){
+ const date=iso(new Date());
+ if(date===TODAY||ui.editing||activeTrainingToday())return;
+ TODAY=date;ui.manualChoice=false;render();
+}
+autoWatch();document.addEventListener('visibilitychange',()=>{
+ if(document.visibilityState==='visible'){refreshTrainingDay();autoWatch()}
+});
 </script>
 
 <script>if(!(window.Capacitor&&Capacitor.isNativePlatform&&Capacitor.isNativePlatform())&&'serviceWorker' in navigator)addEventListener('load',()=>navigator.serviceWorker.register('sw.js').catch(()=>{}))</script>
