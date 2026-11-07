@@ -32,12 +32,12 @@ function app(storage = new Map(), flavor = 'cat') {
     setTimeout: () => 1, clearTimeout() {}, setInterval: () => 1, clearInterval() {}, scrollTo() {},
   };
   context.window = context;
-  vm.createContext(context); vm.runInContext(source, context);
+  vm.createContext(context); vm.runInContext(fs.readFileSync('photo-gesture.js', 'utf8'),context); vm.runInContext(source, context);
   return { control, storage, nodes, read: code => vm.runInContext(code, context),
     click: (act, data = {}) => listeners.click.forEach(cb => cb({ target: { closest: selector => selector === '[data-act]' ? { dataset: { act, ...data } } : null } })),
     input: target => listeners.input.forEach(cb => cb({target})),
     change: target => listeners.change.forEach(cb => cb({target})),
-    event: (kind, target) => (listeners[kind]||[]).forEach(cb => cb({target})) };
+    event: (kind, target, props={}) => (listeners[kind]||[]).forEach(cb => cb({target,...props})) };
 }
 function seedDraft(a) {
   a.read(`ui.code='A'; S.setup=true; const ex=exList('A')[0]; S.drafts.A={date:TODAY,t0:Date.parse('2026-10-27T20:00:00Z'),v:{[ex.id]:[{kg:20,r:10,done:true},{kg:22.5,r:8,done:true}]}}; save()`);
@@ -274,9 +274,15 @@ function workout(id = 'strength', overrides = {}) {
   const missing=app();missing.read('S.hc={on:true,hr:false}');missing.control.records=[workout('missing',{heartRate:[]})];await missing.read('syncWatch(TODAY,false)');
   assert.equal(missing.read('S.history[0].watch.activeKcal'),null);assert.equal(missing.read('S.history[0].watch.totalKcal'),null);
   assert.match(missing.read('watchDetails(S.history[0],0)'),/Não há leituras individuais/);
-  report.click('photo-open',{ex:'sup_incl',pos:'0'});assert.equal(report.nodes.get('#photo-dialog').open,true);
+  const photoTarget = (id, data) => ({id, dataset:data, closest(selector){return selector==='[data-exercise-photo]'?this:null;}});
+  const thumb=photoTarget('',{ex:'sup_incl',pos:'0'}),large=photoTarget('photo-large',{});
+  const tap=(target,t)=>report.event('click',target,{detail:1,timeStamp:t,clientX:50,clientY:50});
+  tap(thumb,100); assert.ok(!report.nodes.get('#photo-dialog')?.open);
+  tap(thumb,900); assert.ok(!report.nodes.get('#photo-dialog')?.open);
+  tap(thumb,1150); assert.equal(report.nodes.get('#photo-dialog').open,true);
   assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_0.jpg');
-  report.click('photo-more');assert.equal(report.nodes.get('#photo-large').style.width,'150%');
+  tap(large,1400);assert.equal(report.nodes.get('#photo-large').style.width,'100%');
+  tap(large,1580);assert.equal(report.nodes.get('#photo-large').style.width,'200%');
   report.click('photo-next');assert.equal(report.nodes.get('#photo-large').src,'img/sup_incl_1.jpg');
   report.click('photo-close');assert.equal(report.nodes.get('#photo-dialog').open,false);
   // Block rotation depends on actual exercise exposures, not calendar weeks or watch labels.

@@ -74,6 +74,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .pics{display:grid;grid-template-columns:1fr 1fr;gap:6px}
 .pics figure{margin:0;position:relative;border-radius:10px;overflow:hidden;background:var(--soft);aspect-ratio:3/2;max-width:100%}
 .pics img{width:100%;height:100%;object-fit:cover;display:block}
+.photo-open,#photo-large{touch-action:manipulation}
 .photo-open{display:block;width:100%;height:100%;padding:0;border:0;background:var(--soft)}
 .pics figcaption{pointer-events:none}
 .photo-dialog{width:calc(100% - 24px);max-width:960px;max-height:94dvh;border:0;border-radius:16px;padding:14px;color:var(--ink);background:var(--surface)}
@@ -255,10 +256,11 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 
 <dialog id="photo-dialog" class="photo-dialog" aria-labelledby="photo-title">
  <div class="photo-tools"><h2 id="photo-title"></h2><button data-act="photo-close" aria-label="Fechar fotografia">✕</button></div>
- <div class="photo-stage"><img id="photo-large" alt=""></div>
- <div class="photo-tools" style="margin-top:12px"><button data-act="photo-prev">← Início</button><span id="photo-position"></span><button data-act="photo-next">Fim →</button><button data-act="photo-less" aria-label="Reduzir fotografia">−</button><button data-act="photo-more" aria-label="Aumentar fotografia">+</button></div>
+ <div class="photo-stage"><img id="photo-large" data-exercise-photo tabindex="0" role="button" aria-label="Alternar ampliação" alt=""></div>
+ <div class="photo-tools" style="margin-top:12px"><button data-act="photo-prev">← Início</button><span id="photo-position"></span><button data-act="photo-next">Fim →</button></div>
 </dialog>
 
+<script src="photo-gesture.js"></script>
 <script src="jszip.min.js"></script>
 <script>
 /* ---------- DADOS DO PLANO ---------- */
@@ -789,7 +791,7 @@ const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
 
 /* ---------- HOJE ---------- */
-function pics(ex){return `<div class="pics">${[0,1].map(pos=>`<figure><button class="photo-open" data-act="photo-open" data-ex="${ex.id}" data-pos="${pos}" aria-label="Ampliar ${ex.n}, posição ${pos?'final':'inicial'}"><img src="img/${ex.id}_${pos}.jpg" alt="${ex.n}: posição ${pos?'final':'inicial'}" loading="lazy"></button><figcaption>${pos?'Fim':'Início'} · ampliar ⤢</figcaption></figure>`).join('')}</div>`}
+function pics(ex){return `<div class="pics">${[0,1].map(pos=>`<figure><button class="photo-open" data-exercise-photo data-ex="${ex.id}" data-pos="${pos}" aria-label="Ampliar ${ex.n}, posição ${pos?'final':'inicial'}"><img src="img/${ex.id}_${pos}.jpg" alt="${ex.n}: posição ${pos?'final':'inicial'}" loading="lazy"></button><figcaption>${pos?'Fim':'Início'} · 2 toques ⤢</figcaption></figure>`).join('')}</div>`}
 function vid(ex){return `<a class="vid" href="https://www.youtube.com/results?search_query=${encodeURIComponent(ex.n+' técnica')}" target="_blank" rel="noopener">Ver vídeo no YouTube ↗</a>`}
 /* ---------- RELÓGIO (Health Connect / Samsung Health) ---------- */
 const CAP=window.Capacitor;const NATIVE=!!(CAP&&CAP.isNativePlatform&&CAP.isNativePlatform());
@@ -1298,6 +1300,7 @@ function vEu(){
  ${vWatchEu()}
  <div class="card stack"><h3>Ciclo de treino</h3><p>Estás na <b>semana ${wk} de 5</b>. Começou a ${dshort(S.start)}.</p>
   <button class="btn ghost sm" data-act="cycle">Recomeçar ciclo hoje</button></div>
+ <a class="btn ghost" href="plano-45.html">Abrir plano de 3 × 45 minutos</a>
  <footer class="muted"><small>Desenvolvido por Alexandre Figueiredo</small></footer></div>`;
 }
 
@@ -1348,10 +1351,8 @@ document.addEventListener('click',e=>{
   if(save(next)){render();toast('Variante trocada para o mesmo grupo muscular. Usa a carga própria desta versão.');}}
  else if(a==='next-workout'){const code=ORDER.includes(b.dataset.c)?b.dataset.c:suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
  else if(a==='rotation-save'){const code=document.getElementById(b.dataset.select).value;if(!ORDER.includes(code)&&code!=='none'){toast('Indica o treino que realizaste');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.rotationCode=code;if(save(next)){ui.manualChoice=false;render();const n=nextCode();toast(n?`Próximo treino: ${n} · ${SESS[n].name}`:'Treino confirmado. Falta identificar a sessão mais recente.')}}
- else if(a==='photo-open'){openPhoto(b.dataset.ex,+b.dataset.pos)}
  else if(a==='photo-close'){$('#photo-dialog').close()}
  else if(a==='photo-prev'||a==='photo-next'){PHOTO.pos=a==='photo-next'?1:0;PHOTO.zoom=1;updatePhoto()}
- else if(a==='photo-more'||a==='photo-less'){PHOTO.zoom=Math.max(1,Math.min(3,PHOTO.zoom+(a==='photo-more'?.5:-.5)));updatePhoto()}
  else if(a==='image-add'){const id=document.getElementById(b.dataset.select).value;if(!EXN[id]){toast('Escolhe o exercício realizado');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.imageExerciseIds=[...new Set([...(h.imageExerciseIds||[]),id])];if(save(next)){render();toast('Imagem associada ao registo ✓')}}
  else if(a==='history'){ui.tab='historico';render();window.scrollTo(0,0)}
  else if(a==='edit-saved'){const h=savedToday(b.dataset.code);if(!h)return;ui.code=h.code;S.drafts[h.code]={date:TODAY,t0:h.t0,readiness:h.readiness||'normal',rir:Object.fromEntries(h.ex.filter(e=>Number.isInteger(e.rir)).map(e=>[e.id,e.rir])),v:Object.fromEntries(h.ex.map(ex=>[ex.id,ex.sets.map(s=>({...s,done:true}))]))};ui.editing=true;save();render()}
@@ -1403,7 +1404,14 @@ function tick(){if(!S.drafts[T.code]||workoutComplete(T.code)){stopTimer();retur
  if(left<=0&&T.id){clearInterval(T.id);T.id=null;$('#timer').classList.add('over');$('#t-label').textContent='Próxima série!';beep()}}
 
 document.addEventListener('keydown',e=>{if(!$('#photo-dialog').open)return;if(e.key==='ArrowLeft'||e.key==='ArrowRight'){PHOTO.pos=e.key==='ArrowRight'?1:0;PHOTO.zoom=1;updatePhoto();e.preventDefault()}});
-document.addEventListener('dblclick',e=>{if(e.target.id==='photo-large'){PHOTO.zoom=PHOTO.zoom===1?2:1;updatePhoto()}});
+function activateExercisePhoto(photo){
+ if(photo.id==='photo-large'){PHOTO.zoom=PHOTO.zoom===1?2:1;updatePhoto()}
+ else openPhoto(photo.dataset.ex,Number(photo.dataset.pos));
+}
+bindExercisePhotos(document,activateExercisePhoto);
+document.addEventListener('keydown',e=>{
+ if(e.target.id==='photo-large'&&(e.key==='Enter'||e.key===' ')){e.preventDefault();activateExercisePhoto(e.target)}
+});
 
 document.title=APPNAME;$('#appname').textContent=APPNAME;
 if(FLAV==='mary'){const bi=$('#brand-img');bi.src='icons/mary-avatar.png';bi.hidden=false;document.querySelector('.brand small').textContent='Treino e alimentação à tua medida'}
