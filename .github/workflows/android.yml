@@ -72,20 +72,24 @@ jobs:
           fi
           if [ "$SIGNED" = "release" ]; then
             cp app/build/outputs/apk/release/app-release.apk ../CatPower.apk
+            cp wear/build/outputs/apk/release/wear-release.apk ../CatPower-Watch.apk
           else
             cp app/build/outputs/apk/debug/app-debug.apk ../CatPower.apk
+            cp wear/build/outputs/apk/debug/wear-debug.apk ../CatPower-Watch.apk
           fi
 
       - uses: actions/upload-artifact@v4
         with:
           name: CatPower
-          path: CatPower.apk
+          path: |
+            CatPower.apk
+            CatPower-Watch.apk
 
       - name: Publicar versão
         if: env.SIGNED == 'release'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v1.0.${{ github.run_number }}" CatPower.apk \
+          gh release create "v1.0.${{ github.run_number }}" CatPower.apk CatPower-Watch.apk \
             --title "Cat Power 1.0.${{ github.run_number }}" \
-            --notes "Versão Android da Cat Power, com ligação ao Samsung Health." --latest
+            --notes "CatPower.apk para o telemóvel e CatPower-Watch.apk para o relógio Wear OS." --latest

@@ -997,6 +997,35 @@ function savedWorkoutCard(h){const st=hStats(h);
  ${h.ex.map(e=>`<div class="stack"><h3>${EXN[e.id]||e.id}</h3>${EXN[e.id]?pics({id:e.id,n:EXN[e.id]}):''}${e.sets.map((s,k)=>`<div class="exrow num"><span>✓ Série ${k+1}</span><span>${fmt(s.kg||0)} kg × ${s.r} reps</span></div>`).join('')}</div>`).join('')}
  <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
 }
+const liveWatchPlugin=NATIVE&&CAP.Plugins?.LiveWatch;
+function liveWatchCard(){
+ if(!liveWatchPlugin)return '';
+ return `<section class="card stack" aria-label="Relógio em direto"><div class="ex-head"><h3>Relógio em direto</h3><button class="btn ghost sm" data-act="watch-live-open">Abrir no relógio</button></div><strong data-live-values class="num">— bpm · —:—</strong><p class="muted" data-live-status>Abre a Cat Power no relógio e toca em Começar.</p></section>`;
+}
+function liveWatchDisplay(snapshot){
+ const empty='— bpm · —:—';
+ if(!snapshot.seen)return [empty,'Abre a Cat Power no relógio e toca em Começar.'];
+ if(!snapshot.active)return [empty,'Direto terminado no relógio.'];
+ if(snapshot.age>=15)return [empty,'Sinal interrompido. Aproxima o relógio do telemóvel.'];
+ const t=snapshot.seconds+snapshot.age;
+ const clock=Math.floor(t/60)+':'+String(t%60).padStart(2,'0');
+ return [(snapshot.bpm>0?snapshot.bpm:'—')+' bpm · '+clock,snapshot.bpm>0?'Em direto · tempo desde o início no relógio':'Relógio ligado · à espera da leitura dos batimentos'];
+}
+let liveReadPending=false;
+async function refreshLiveWatch(){
+ if(!liveWatchPlugin||document.hidden||liveReadPending||!document.querySelector('[data-live-values]'))return;
+ liveReadPending=true;
+ let display;
+ try{display=liveWatchDisplay(await liveWatchPlugin.snapshot())}
+ catch{display=['— bpm · —:—','Sem ligação à Cat Power do relógio.']}
+ finally{liveReadPending=false}
+ const values=document.querySelector('[data-live-values]'),status=document.querySelector('[data-live-status]');
+ if(values&&status){values.textContent=display[0];status.textContent=display[1]}
+}
+async function openLiveWatch(){
+ try{await liveWatchPlugin.openWatch();toast('No relógio, toca em Começar.')}
+ catch{toast('Abre a Cat Power no relógio. Confirma que a versão Wear OS está instalada.')}
+}
 function todayWatchCard(){return NATIVE?`<div class="card stack"><div class="ex-head"><h3>Relógio · hoje</h3>${watchSyncButton()}</div>${watchCard(TODAY)}${watchSyncStatus()}</div>`:''}
 function activeTrainingToday(){
  return ORDER.find(c=>S.drafts[c]?.date===TODAY&&draftHasEntries(S.drafts[c]));
@@ -1021,11 +1050,12 @@ function workoutLetters(info,openCode){
 }
 function vHoje(){
  refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,info=nextTrainingInfo();
- const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${workoutLetters(info,code)}${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard(info)}</div>`;
+ const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${workoutLetters(info,code)}${liveWatchCard()}${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard(info)}</div>`;
  const completed=S.history.filter(x=>x.d<=TODAY),done=completed.length,last7=completed.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=[...completed].sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).slice(-1)[0];
  let h=`<div class="stack">${postContext().time?'<button class="btn" data-act="post-open">🍽 Refeições depois do treino de hoje</button>':''}
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
  ${workoutLetters(info,code)}
+ ${liveWatchCard()}
  ${recommendationCard(info)}
  <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Novas variantes todas as semanas de progressão: isolados e core semanalmente; compostos a cada duas semanas. Vê as próximas semanas no Plano.'}`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
@@ -1305,6 +1335,7 @@ document.addEventListener('click',e=>{
  const tb=e.target.closest('nav.tabs button');if(tb){if(tb.dataset.tab==='hoje'&&ui.tab!=='hoje'&&!ui.editing)ui.manualChoice=false;ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
  if(a==='post-open'){ui.tab='refeicoes';render();document.getElementById('post-workout')?.scrollIntoView?.({behavior:'smooth'});return}
+ if(a==='watch-live-open'){openLiveWatch();return}
  if(a==='post-auto'){const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postTime:null,postChoice:null};if(save(next))render();return}
  if(a==='post-select'){const ctx=postContext();if(!postOptions(mealPlan(targets()),ctx).some(o=>o.id===b.dataset.id))return;const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postChoice:{key:ctx.key,id:b.dataset.id}};if(save(next)){render();toast('Refeição substituída no plano de hoje ✓')}return}
  if(a==='code'){ui.code=b.dataset.c;ui.editing=false;ui.manualChoice=true;render();toast(`Plano ${ui.code} selecionado. A sequência só avança depois de um treino concluído.`)}
@@ -1383,6 +1414,7 @@ function refreshTrainingDay(){
  if(date===TODAY||ui.editing||activeTrainingToday())return;
  TODAY=date;ui.manualChoice=false;render();
 }
+if(liveWatchPlugin){refreshLiveWatch();setInterval(refreshLiveWatch,1000)}
 autoWatch();document.addEventListener('visibilitychange',()=>{
  if(document.visibilityState==='visible'){refreshTrainingDay();autoWatch()}
 });

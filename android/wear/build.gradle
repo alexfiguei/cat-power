@@ -1,0 +1,34 @@
+apply plugin: 'com.android.application'
+
+android {
+    namespace 'pt.catpower.wear'
+    compileSdk rootProject.ext.compileSdkVersion
+
+    defaultConfig {
+        applicationId 'pt.catpower.app'
+        minSdk 30
+        targetSdk rootProject.ext.targetSdkVersion
+        versionCode((System.getenv('CATPOWER_VERSION_CODE') ?: '1').toInteger())
+        versionName('1.0.' + (System.getenv('CATPOWER_VERSION_CODE') ?: '1'))
+    }
+    signingConfigs {
+        catpower {
+            def ks = System.getenv("CATPOWER_KEYSTORE")
+            if (ks != null && file(ks).exists()) {
+                storeFile file(ks)
+                storePassword System.getenv("CATPOWER_KEYSTORE_PASSWORD")
+                keyAlias System.getenv("CATPOWER_KEY_ALIAS")
+                keyPassword System.getenv("CATPOWER_KEY_PASSWORD")
+            }
+        }
+    }
+    buildTypes {
+        release {
+            if (System.getenv('CATPOWER_KEYSTORE') != null) signingConfig signingConfigs.catpower
+        }
+    }
+}
+
+dependencies {
+    implementation 'com.google.android.gms:play-services-wearable:19.0.0'
+}

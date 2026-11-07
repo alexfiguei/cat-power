@@ -46,6 +46,15 @@ function workout(id = 'strength', overrides = {}) {
   return { id, sourceBundleId: 'com.sec.android.app.shealth', startDate: '2026-10-27T20:00:00Z', endDate: '2026-10-27T20:50:00Z', duration: 3000, calories: 310, workoutType: 'STRENGTH_TRAINING', heartRate: [{ bpm: 110 }, { bpm: 130 }], ...overrides };
 }
 (async () => {
+  {
+    const live=app();
+    const display=delta=>JSON.parse(live.read(`JSON.stringify(liveWatchDisplay(${JSON.stringify({seen:true,active:true,age:2,seconds:75,bpm:112,...delta})}))`));
+    assert.equal(display({})[0],'112 bpm · 1:17');
+    assert.equal(display({bpm:0})[0],'— bpm · 1:17');
+    assert.match(display({age:15})[1],/interrompido/);
+    assert.match(display({active:false})[1],/terminado/);
+    assert.match(display({seen:false})[1],/Começar/);
+  }
   { const food=app();
   assert.equal(food.read('postContext().time'),'');
   assert.match(food.read('vRef()'),/Ainda sem hora de conclusão/);
