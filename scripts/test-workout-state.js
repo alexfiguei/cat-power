@@ -250,6 +250,17 @@ function workout(id = 'strength', overrides = {}) {
   // Block rotation depends on actual exercise exposures, not calendar weeks or watch labels.
   const weekly=app();
   weekly.read('S.drafts={};S.start=TODAY');
+  const machines = app();
+  for (const item of JSON.parse(machines.read('JSON.stringify(novasMaquinas)'))) {
+    machines.read(`ui.code='${item.code}'; S.drafts={}; S.start=TODAY`);
+    machines.click('variant', {slot:String(item.slot),target:item.id});
+    assert.equal(machines.read(`exList('${item.code}')[${item.slot}].id`), item.id);
+    machines.read(`S.drafts['${item.code}'].v['${item.id}']=[{r:8,kg:10,done:true}]`);
+    machines.click('variant',{slot:String(item.slot)});
+    assert.equal(machines.read(`exList('${item.code}')[${item.slot}].id`),item.id);
+    assert.ok(machines.read(`Array.from({length:25},(_,w)=>exList('${item.code}',w)[${item.slot}].id).includes('${item.id}')`));
+  }
+  assert.match(machines.read('vPlano()'),/Novas máquinas de hipertrofia/);
   const previewBefore=weekly.read('JSON.stringify(S)');
   for(const code of ['A','B','C','D']){
     const weeks=Array.from({length:11},(_,week)=>JSON.parse(weekly.read(`JSON.stringify(exList('${code}',${week}))`)));

@@ -481,6 +481,20 @@ const SESS={
     care:'Sem peso: progride com mais reps; quando for fácil, faz com as pernas esticadas.'}]}
  ]}
 };
+// Novas variantes ilustradas. Os IDs anteriores continuam a identificar cargas e rascunhos.
+const novasMaquinas = [
+ {code:'A', slot:1, id:'remada_alta_alavanca', img:1, n:'Remada alta na máquina de alavancas', inc:2.5,
+  cues:['Ajusta o assento para alcançares as pegas altas com os pés apoiados.','Puxa os cotovelos para baixo e para trás, mantendo o tronco estável.','Regressa devagar, sem deixar os discos bater.']},
+ {code:'B', slot:0, id:'prensa_pes_proximos', img:1, n:'Leg press com os pés mais próximos', inc:5,
+  cues:['Coloca os pés um pouco mais juntos do que a largura dos ombros, numa posição confortável.','Desce enquanto os calcanhares, a bacia e as costas mantiverem o apoio.','Empurra com o pé inteiro e acompanha a direção dos pés com os joelhos.']},
+ {code:'C', slot:0, id:'press_declinado_maq', img:1, n:'Press de peito declinado na máquina', inc:2.5,
+  cues:['Ajusta o assento para que as pegas comecem junto à parte inferior do peito.','Mantém as costas apoiadas e os punhos alinhados com os antebraços.','Empurra as pegas e regressa devagar até uma amplitude confortável.']},
+ {code:'D', slot:4, id:'gemeos_prensa_horizontal', img:1, n:'Gémeos na máquina de prensa horizontal', inc:2.5,
+  cues:['Ajusta o banco e apoia a parte da frente dos pés na plataforma.','Mantém os joelhos ligeiramente fletidos e estáveis enquanto empurras com a ponta dos pés.','Volta devagar pelo tornozelo, sem balanço.']}
+];
+if (FLAV !== 'mary') {
+ for (const variante of novasMaquinas) SESS[variante.code].ex[variante.slot].v.push(variante);
+}
 /* ativação: leve, sem cansar, para sentir o músculo antes dos compostos */
 const ACT={
  A:[['Afastar elástico à frente do peito (band pull-apart)','2 × 15'],['Rotação externa do ombro com elástico','2 × 12 por lado'],['Flexões escapulares (só as omoplatas mexem)','1 × 10']],
@@ -964,6 +978,7 @@ function exCard(ex,i,wk,deload,d){
  ${ex.img?pics(ex):`<p>${vid(ex)}</p>`}<p class="coach"><b>${ex.choice.changed?'Nova variante':FLAV==='mary'?'Bloco de progressão':'Variação semanal'}</b><br>${ex.choice.why}<br><small>As cargas pertencem a esta variante e ao mesmo modelo de máquina.</small></p>${hist}<div class="sets">${rows}</div>${tip}
  <label>Reserva na última série (RIR)<select class="rotation-select" data-rir="${ex.id}" aria-label="Reserva na última série de ${ex.n}"><option value="">Ainda não registei</option>${[0,1,2,3,4].map(r=>`<option value="${r}" ${rir===r?'selected':''}>${r===0?'0 · não conseguia fazer mais nenhuma':r===4?'4 ou mais':r+' '+(r===1?'repetição':'repetições')+' em reserva'}</option>`).join('')}</select></label>
  <button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}">Trocar variante · ${ex.muscle}</button>
+ ${ex.v.filter(v=>v.code && v.id!==ex.id).map(v=>`<button class="btn ghost sm" data-act="variant" data-slot="${ex.slot}" data-target="${v.id}">Usar ${v.n}</button>`).join('')}
  <details><summary>Técnica</summary><ul>${ex.cues.map(c=>`<li>${c}</li>`).join('')}</ul>${ex.care?`<p class="care"><b>Cuidado:</b> ${ex.care}</p>`:''}<p style="margin-top:8px">${vid(ex)}</p></details></article>`;
 }
 function savedWorkoutCard(h){const st=hStats(h);
@@ -1099,6 +1114,7 @@ function vPlano(){
  <div class="card stack"><h3>Sem dias fixos</h3><div class="sched">${ORDER.map(c=>`<div class="srow"><b>${c}</b><i style="background:var(--${SESS[c].cls})"></i><span>${SESS[c].name}</span></div>`).join('')}</div>
   <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div>`;
  if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve: as variantes da semana 4 mantêm-se, com metade das séries.':'Isolados e core mudam semanalmente; os compostos mudam a cada duas semanas de progressão.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
+ if(FLAV!=='mary') h+=`<section class="card stack"><h2>Novas máquinas de hipertrofia</h2><p>Abre uma máquina para veres a execução. Em Hoje, podes escolhê-la antes de registar a primeira série desse exercício.</p>${novasMaquinas.map(v=>{const sl=SESS[v.code].ex[v.slot];return `<details><summary>Treino ${v.code} · ${v.n}</summary><p class="ex-meta num">${previewCycleWeek===5?Math.ceil(sl.sets/2):sl.sets} × ${sl.reps.join('–')} reps · descanso ${restTxt(sl.iso?sl.rest:Math.max(120,sl.rest))}</p>${pics(v)}<ul>${v.cues.map(c=>`<li>${c}</li>`).join('')}</ul></details>`}).join('')}</section>`;
  ORDER.forEach(c=>{const s=SESS[c];
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
   <p class="eyebrow" style="margin-top:12px">Ativação</p><div>${ACT[c].map(a=>`<div class="exrow num"><span>${a[0]}</span><span>${a[1]}</span></div>`).join('')}</div>
@@ -1264,7 +1280,9 @@ document.addEventListener('click',e=>{
  if(a==='code'){ui.code=b.dataset.c;ui.editing=false;ui.manualChoice=true;render();toast(`Plano ${ui.code} selecionado. A sequência só avança depois de um treino concluído.`)}
  else if(a==='variant'){const slot=Number(b.dataset.slot),code=ui.code,sl=SESS[code]&&SESS[code].ex[slot];if(!sl)return;const current=exList(code),d=draft(code),id=current[slot].id;
   if((d.v[id]||[]).some(s=>s&&(s.done||s.r>0||s.kg>0))){toast('Esta variante já tem séries registadas neste treino. Guarda-as antes de trocar.');return;}
-  const next=JSON.parse(JSON.stringify(S)),target=next.drafts[code];target.ids=current.map(e=>e.id);target.ids[slot]=sl.v[(current[slot].vi+1)%sl.v.length].id;
+  const chosen=b.dataset.target?sl.v.find(v=>v.id===b.dataset.target):sl.v[(current[slot].vi+1)%sl.v.length];
+  if(!chosen)return;
+  const next=JSON.parse(JSON.stringify(S)),target=next.drafts[code];target.ids=current.map(e=>e.id);target.ids[slot]=chosen.id;
   if(save(next)){render();toast('Variante trocada para o mesmo grupo muscular. Usa a carga própria desta versão.');}}
  else if(a==='next-workout'){const code=suggested();if(!code)return;ui.code=code;ui.editing=false;ui.manualChoice=true;ui.tab='hoje';render();window.scrollTo(0,0)}
  else if(a==='rotation-save'){const code=document.getElementById(b.dataset.select).value;if(!ORDER.includes(code)&&code!=='none'){toast('Indica o treino que realizaste');return}const next=JSON.parse(JSON.stringify(S)),h=next.history.find(x=>historyKey(x)===decodeURIComponent(b.dataset.record));if(!h)return;h.rotationCode=code;if(save(next)){ui.manualChoice=false;render();const n=nextCode();toast(n?`Próximo treino: ${n} · ${SESS[n].name}`:'Treino confirmado. Falta identificar a sessão mais recente.')}}
