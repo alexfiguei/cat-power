@@ -67,7 +67,7 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .codebtn{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:8px 4px;display:flex;flex-direction:column;align-items:center;gap:3px;min-height:68px}
 .codebtn b{font-family:var(--display);font-size:1.5rem;line-height:1}
 .codebtn small{font-size:.68rem;color:var(--ok);font-weight:700;text-transform:uppercase;letter-spacing:.04em}
-.codebtn small.nx{color:var(--muted)}
+.codebtn small{color:var(--muted)}
 .nextline{display:flex;justify-content:space-between;align-items:center;gap:10px;background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:10px 12px;font-size:.95rem}
 .nextline span{color:var(--muted)}
 .nextline b{display:flex;align-items:center;gap:8px;font-family:var(--display);font-size:1.15rem;text-transform:uppercase;text-align:right}
@@ -96,6 +96,11 @@ button:focus-visible,input:focus-visible,select:focus-visible,summary:focus-visi
 .pics figcaption{position:absolute;left:6px;top:6px;background:rgba(21,32,42,.82);color:#fff;font-size:.72rem;font-weight:700;text-transform:uppercase;letter-spacing:.06em;padding:2px 7px;border-radius:6px}
 .vid{font-size:.9rem;font-weight:600;color:var(--blue)}
 .codebtn.sel{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.codebtn.next-training{background:#125438;color:white;border-color:#125438;box-shadow:inset 0 0 0 1px #125438}
+.codebtn.next-training small{color:white}
+.codebtn.next-training .dot{outline:1px solid white}
+@keyframes next-training-pulse{50%{box-shadow:0 0 0 4px rgba(18,84,56,.23)}}
+@media (prefers-reduced-motion:no-preference){.codebtn.next-training{animation:next-training-pulse 1.8s ease-in-out 2}}
 .dot{width:12px;height:12px;border-radius:50%}
 /* topo */
 .top{display:flex;align-items:center;gap:14px}
@@ -990,15 +995,27 @@ function savedWorkoutCard(h){const st=hStats(h);
  <button class="btn ghost" data-act="history">Ver histórico</button><button class="btn ghost sm" data-act="edit-saved" data-code="${h.code}">Editar treino guardado</button></section>`;
 }
 function todayWatchCard(){return NATIVE?`<div class="card stack"><div class="ex-head"><h3>Relógio · hoje</h3>${watchSyncButton()}</div>${watchCard(TODAY)}${watchSyncStatus()}</div>`:''}
+function workoutLetters(info,openCode){
+ const last=info.last?rotationCode(info.last):null;
+ const buttons=ORDER.map(c=>{
+  const next=c===info.code;
+  const role=next?'Próximo':c===last?'Último':'';
+  const open=c===openCode;
+  const inProgress=S.drafts[c]?.date===TODAY&&draftHasEntries(S.drafts[c]);
+  const secondary=inProgress?'Em curso':open&&!role?'A ver':'';
+  const labels=[role,secondary].filter(Boolean);
+  return `<button class="codebtn${open?' sel':''}${next?' next-training':''}" data-act="code" data-c="${c}" aria-pressed="${open}" aria-label="Treino ${c} · ${[SESS[c].name,...labels].join(' · ')}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${labels.map(label=>`<small>${label}</small>`).join('')}</button>`;
+ });
+ return `<p class="eyebrow">Próximo treino pelo teu histórico</p><div class="codes">${buttons.join('')}</div>`;
+}
 function vHoje(){
- refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,nx=nextCode();
- const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard()}</div>`;
+ refreshWorkoutSelection();const wk=cycleWeek(),deload=wk===5,code=ui.code,info=nextTrainingInfo();
+ const saved=savedToday(code);if(saved&&!ui.editing)return `<div class="stack">${workoutLetters(info,code)}${savedWorkoutCard(saved)}${todayWatchCard()}${recommendationCard(info)}</div>`;
  const completed=S.history.filter(x=>x.d<=TODAY),done=completed.length,last7=completed.filter(x=>Date.parse(TODAY)-Date.parse(x.d)<7*864e5).length,lastS=[...completed].sort((a,b)=>a.d.localeCompare(b.d)||(a.t1||0)-(b.t1||0)).slice(-1)[0];
  let h=`<div class="stack">${postContext().time?'<button class="btn" data-act="post-open">🍽 Refeições depois do treino de hoje</button>':''}
  <div class="stats num"><div><b>${pad(done)}</b><small>sessões feitas</small></div><div><b>${pad(last7)}</b><small>nos últimos 7 dias</small></div><div><b>${lastS?dshort(lastS.d):'—'}</b><small>último treino</small></div></div>
- <p class="eyebrow">Próximo treino pelo teu histórico</p>
- <div class="codes">${ORDER.map(c=>`<button class="codebtn ${c===code?'sel':''}" data-act="code" data-c="${c}" aria-pressed="${c===code}"><span class="dot p-${SESS[c].cls}"></span><b>${c}</b>${c===code?'<small>Selecionado</small>':c===nx?'<small class="nx">Sugerido</small>':''}</button>`).join('')}</div>
- ${recommendationCard()}
+ ${workoutLetters(info,code)}
+ ${recommendationCard(info)}
  <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Novas variantes todas as semanas de progressão: isolados e core semanalmente; compostos a cada duas semanas. Vê as próximas semanas no Plano.'}`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
@@ -1035,7 +1052,7 @@ function historyKey(h){return h.source==='watch'?'watch:'+h.watch.id:'session:'+
 function rotationSelector(h,id){const selected=h.rotationCode==='none'?'none':rotationCode(h)||'';
  return `<div class="stack" style="margin-top:12px"><label for="${id}">Que treino realizaste?</label><select class="rotation-select" id="${id}"><option value="">Selecionar o treino realizado</option>${ORDER.map(c=>`<option value="${c}" ${selected===c?'selected':''}>${c} · ${SESS[c].name}</option>`).join('')}<option value="none" ${selected==='none'?'selected':''}>Fora do plano · não altera a sequência</option></select><button class="btn ghost sm" data-act="rotation-save" data-record="${encodeURIComponent(historyKey(h))}" data-select="${id}">Confirmar treino realizado</button></div>`;
 }
-function recommendationCard(){const info=nextTrainingInfo();if(!info.code)return `<section class="card stack"><p class="pill warn">Falta identificar o último treino</p><h2>Acertar o próximo treino</h2><p>O relógio registou musculação a ${dshort(info.last.d)}. Indica qual dos treinos fizeste para atualizar a sequência.</p>${rotationSelector(info.last,'rotation-pending')}</section>`;
+function recommendationCard(info=nextTrainingInfo()){if(!info.code)return `<section class="card stack"><p class="pill warn">Falta identificar o último treino</p><h2>Acertar o próximo treino</h2><p>O relógio registou musculação a ${dshort(info.last.d)}. Indica qual dos treinos fizeste para atualizar a sequência.</p>${rotationSelector(info.last,'rotation-pending')}</section>`;
  return `<section class="card stack"><p class="eyebrow">Próximo treino sugerido</p><h2>${info.code} · ${SESS[info.code].name}</h2><p class="muted">${info.last?`Com base no treino ${rotationCode(info.last)} realizado a ${dshort(info.last.d)}.`:'Primeira sessão: ainda não há um treino do plano identificado no histórico.'}</p><button class="btn ghost sm" data-act="next-workout">Ver próximo treino</button></section>`;
 }
 const PHOTO={id:null,pos:0,zoom:1};
@@ -1272,7 +1289,7 @@ function refreshKV(){clearTimeout(refreshKV.id);refreshKV.id=setTimeout(()=>{con
 document.addEventListener('click',e=>{
  if(e.target.id==='samsung-file'){SAMSUNG_PICKER=true;return}
  if(e.target===$('#photo-dialog')){$('#photo-dialog').close();return}
- const tb=e.target.closest('nav.tabs button');if(tb){ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
+ const tb=e.target.closest('nav.tabs button');if(tb){if(tb.dataset.tab==='hoje'&&ui.tab!=='hoje'&&!ui.editing)ui.manualChoice=false;ui.tab=tb.dataset.tab;render();window.scrollTo(0,0);return}
  const b=e.target.closest('[data-act]');if(!b)return;const a=b.dataset.act;
  if(a==='post-open'){ui.tab='refeicoes';render();document.getElementById('post-workout')?.scrollIntoView?.({behavior:'smooth'});return}
  if(a==='post-auto'){const next=JSON.parse(JSON.stringify(S));next.nutrition={...next.nutrition,postTime:null,postChoice:null};if(save(next))render();return}

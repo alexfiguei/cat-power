@@ -200,11 +200,25 @@ function workout(id = 'strength', overrides = {}) {
   const rotation=app();
   rotation.read(`S.sessions=[{d:TODAY,code:'D'}];S.history=[mkHist('2026-10-25','A',[],1,2),mkHist('2026-10-24','D',[],1,2)]`);
   assert.equal(rotation.read('suggested()'), 'B');
+  function letter(html,code){return html.match(new RegExp('<button class="codebtn[^>]*data-c="'+code+'"[^>]*>[\\s\\S]*?</button>'))?.[0]||''}
+  const initial=rotation.read('vHoje()');
+  assert.match(letter(initial,'A'),/>Último</);
+  assert.match(letter(initial,'B'),/next-training/);
+  assert.match(letter(initial,'B'),/aria-pressed="true"/);
+  assert.match(letter(initial,'B'),/>Próximo</);
   rotation.click('code',{c:'D'});assert.equal(rotation.read('nextCode()'), 'B');
+  assert.match(letter(rotation.read('vHoje()'),'B'),/>Próximo</);
+  assert.doesNotMatch(letter(rotation.read('vHoje()'),'D'),/next-training/);
   rotation.read(`S.history.push(mkHist(TODAY,'B',[],Date.now()-3600000,Date.now()-1))`);
   assert.equal(rotation.read('suggested()'), 'C');
+  rotation.read('ui.manualChoice=false');
+  const completedScreen=rotation.read('vHoje()');
+  assert.match(letter(completedScreen,'B'),/>Último</);
+  assert.match(letter(completedScreen,'C'),/>Próximo</);
+
   rotation.read(`S.history.push({...mkHist(TODAY,null,[],Date.now()-1000,Date.now()),source:'watch',watch:{id:'unknown',type:'STRENGTH_TRAINING',title:'Musculação'}})`);
   assert.equal(rotation.read('suggested()'), null);
+  assert.doesNotMatch(rotation.read('vHoje()'),/class="codebtn[^"]*next-training/);
   assert.match(rotation.read('recommendationCard()'), /Falta identificar o último treino/);
   rotation.nodes.set('#classify', {value:'C'});
   rotation.click('rotation-save',{select:'classify',record:encodeURIComponent('watch:unknown')});
