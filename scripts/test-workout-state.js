@@ -4,7 +4,7 @@ const vm = require('node:vm');
 process.env.TZ = 'Europe/Lisbon';
 const html = fs.readFileSync('index.html', 'utf8');
 const source = [...html.matchAll(/<script>([\s\S]*?)<\/script>/g)][1][1];
-const now = Date.parse('2026-10-27T21:00:00Z');
+let now = Date.parse('2026-10-27T21:00:00Z');
 class TestDate extends Date {
   constructor(...args) { super(...(args.length ? args : [now])); }
   static now() { return now; }
@@ -449,6 +449,41 @@ function workout(id = 'strength', overrides = {}) {
   const picker=app();picker.read('S.hc={on:true,hr:false}');picker.event('click',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),true);const before=picker.nodes.get('#app').innerHTML;picker.read('autoWatch();render()');assert.equal(picker.control.queries.length,0);assert.equal(picker.nodes.get('#app').innerHTML,before);picker.event('cancel',{id:'samsung-file'});assert.equal(picker.read('SAMSUNG_PICKER'),false);
   console.log('PASS: Samsung CSV import, timezone, 30-day window, invalid rows, match and duplicate prevention. Synthetic data only.');
   console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
+  const originalNow=now;
+  const snapshots=[];
+  for(const date of ['2026-11-14','2026-11-21']){
+    now=Date.parse(date+'T12:00:00Z');
+    const edition=app();
+    edition.read("S.start='2026-10-20';S.drafts={}");
+    const before=edition.read('JSON.stringify(S)');
+    const plans=JSON.parse(edition.read("JSON.stringify(['A','B','C','D'].map(c=>exList(c)))"));
+    snapshots.push(plans);
+    plans.forEach(plan=>{
+      assert.equal(new Set(plan.map(e=>e.id)).size,plan.length);
+      plan.forEach(e=>{
+        assert.ok(e.cues.length>0 && e.sets>0 && e.rest>0,e.id);
+        for(const pos of [0,1])assert.ok(fs.statSync('img/'+e.id+'_'+pos+'.jpg').size>1000);
+      });
+    });
+    assert.equal(edition.read('JSON.stringify(S)'),before);
+    assert.equal(edition.read('hypertrophyEdition(TODAY).date'),date);
+    edition.read("S.drafts.A={date:TODAY,v:{remada_peito:[{r:8,kg:20,done:true}]},ids:SESS.A.ex.map(s=>s.v[0].id)}");
+    assert.equal(edition.read("exList('A')[1].id"),'remada_peito');
+    const pinned=edition.read('JSON.stringify(S.drafts.A)');
+    edition.read('ui.planWeekOffset=1;vPlano()');
+    assert.equal(edition.read('JSON.stringify(S.drafts.A)'),pinned);
+  }
+  assert.equal(snapshots[0][0][0].id,'sup_incl_maq');
+  assert.equal(snapshots[0][0][0].id,snapshots[1][0][0].id);
+  assert.equal(snapshots[0][0][2].id,snapshots[1][0][2].id);
+  assert.equal(snapshots[0][1][3].id,snapshots[1][1][3].id);
+  assert.equal(snapshots[0][0][1].id,'remada_alta_alavanca');
+  assert.equal(snapshots[1][0][1].id,'remada_cabo');
+  assert.equal(snapshots[0][1][0].id,'prensa_pes_proximos');
+  assert.equal(snapshots[1][1][0].id,'smith_squat');
+  assert.equal(snapshots[0][2][0].id,'press_declinado_maq');
+  assert.equal(snapshots[1][2][0].id,'chest_press_incl');
+  now=originalNow;
   console.log('PASS: weekly variant schedules, cycle rollover and deload, read-only future previews, upgrade/draft preservation, separate variant loads, legacy exposure blocks, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');
 })().catch(error => { console.error(error); process.exitCode = 1; });

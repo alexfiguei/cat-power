@@ -277,7 +277,7 @@ nav.tabs button[aria-selected="true"] svg{stroke:var(--blue)}
 <script>
 /* ---------- DADOS DO PLANO ---------- */
 /* Cada exercício é um posto com variantes para o mesmo grupo muscular.
-   Os exercícios rodam todas as semanas dentro do mesmo grupo muscular.
+   As edições semanais combinam variantes do mesmo grupo muscular e exercícios de referência para acompanhar a progressão.
    A quinta semana mantém as variantes da quarta, com menos esforço.
    iso = exercício de isolamento. img = há fotos da variante. */
 const SESS={
@@ -541,9 +541,23 @@ function blockVariantChoice(code,slot){const sl=SESS[code].ex[slot],history=slot
 // Zero-based week since the plan started; use date-only UTC arithmetic across DST.
 function trainingWeekIndex(){const days=(Date.parse(TODAY)-Date.parse(S.start))/864e5;return Number.isFinite(days)?Math.max(0,Math.floor(days/7)):0;}
 function weekStart(index){const start=Date.parse(S.start);return new Date((Number.isFinite(start)?start:Date.parse(TODAY))+index*7*864e5).toISOString().slice(0,10);}
+// Dated editions reuse illustrated IDs and preserve each slot's prescription.
+const HYPERTROPHY_EDITIONS=[
+ {date:'2026-11-14',choices:{A:{0:'sup_incl_maq',1:'remada_alta_alavanca',2:'puxada'},B:{0:'prensa_pes_proximos',3:'leg_curl_s'},C:{0:'press_declinado_maq'}}},
+ {date:'2026-11-21',choices:{A:{0:'sup_incl_maq',1:'remada_cabo',2:'puxada'},B:{0:'smith_squat',3:'leg_curl_s'},C:{0:'chest_press_incl'}}}
+];
+function hypertrophyEdition(date){
+ return HYPERTROPHY_EDITIONS.filter(e=>e.date<=date).at(-1)||null;
+}
+function editionDate(week){
+ return new Date(Date.parse(TODAY)+(week-trainingWeekIndex())*7*864e5).toISOString().slice(0,10);
+}
 function variantChoice(code,slot,week=trainingWeekIndex()){
  if(FLAV==='mary')return blockVariantChoice(code,slot);
  const sl=SESS[code].ex[slot];
+ const edition=hypertrophyEdition(editionDate(week)),id=edition?.choices[code]?.[slot];
+ const selected=sl.v.findIndex(v=>v.id===id);
+ if(selected>=0)return {vi:selected,changed:false,why:'Edição de '+dshort(edition.date)+'. Compara cargas apenas no mesmo equipamento. Mantém a margem de esforço indicada nesta semana.'};
  const sequence=sl.v.map((v,i)=>i).sort((a,b)=>Number(machineVariant(sl.v[b]))-Number(machineVariant(sl.v[a])));
  const vi=sequence[week%sequence.length];
  return {vi,changed:week>0&&sequence.length>1,why:week%5===4?'Semana leve. Usa a variante desta semana com menos séries e margem de esforço.':'Variante desta semana para o mesmo grupo muscular. Regista a carga própria deste exercício.'};
@@ -553,7 +567,7 @@ function marGoal(ex){const g=(typeof S!=='undefined'&&S&&S.profile)?S.profile.go
  if(g==='perder'||g==='definir')return Object.assign({},ex,{reps:[ex.reps[0]+2,ex.reps[1]+3],rest:Math.min(ex.rest,60)});
  if(g==='ganhar')return Object.assign({},ex,{sets:ex.sets+(ex.core?0:1)});
  return ex}
-function exList(code,previewWeek=null){const d=S.drafts[code],active=previewWeek===null&&d&&d.date===TODAY&&(FLAV==='mary'||d.planWeek===trainingWeekIndex()||draftHasEntries(d));
+function exList(code,previewWeek=null){const d=S.drafts[code],active=previewWeek===null&&d&&d.date===TODAY&&(FLAV==='mary'||(d.planWeek===trainingWeekIndex()&&d.edition===(hypertrophyEdition(TODAY)?.date||null))||draftHasEntries(d));
  return SESS[code].ex.map((sl,i)=>{const choice=variantChoice(code,i,previewWeek??trainingWeekIndex()),pinned=active&&((d.ids||[])[i]||sl.v.find(v=>(d.v[v.id]||[]).some(z=>z&&(z.r>0||z.kg>0||z.done)))?.id),pin=sl.v.findIndex(v=>v.id===pinned),vi=pin>=0?pin:choice.vi;
  return marGoal(Object.assign({},sl,sl.v[vi],{rest:FLAV!=='mary'&&!sl.iso&&!sl.core?Math.max(120,sl.rest):sl.rest,slot:i,vi,nv:sl.v.length,muscle:muscleFor(code,i),choice:pin>=0&&pin!==choice.vi?{...choice,why:'Variante mantida neste treino em curso.',changed:false}:choice}));});}
 function allVar(code){return SESS[code].ex.flatMap(sl=>sl.v)}
@@ -795,7 +809,7 @@ function coachPlan(ex,g,deload,n,vals){
   if(v.done&&v.kg>0&&v.r>0){cur=coachNext(ex,v);if((recovery==='tired'||failure||deload)&&cur.kg>v.kg)cur={kg:v.kg,why:'mantém a carga e deixa margem para completar com boa técnica'};}}
  return out;
 }
-function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){const ids=exList(code).map(e=>e.id);d=S.drafts[code]={date:TODAY,v:{},ids,rir:{},readiness:'normal',planWeek:trainingWeekIndex()}}else if(FLAV!=='mary'&&d.planWeek!==trainingWeekIndex()){const ids=exList(code).map(e=>e.id);d.ids=ids;d.planWeek=trainingWeekIndex()}return d}
+function draft(code){let d=S.drafts[code];if(!d||d.date!==TODAY){const ids=exList(code).map(e=>e.id);d=S.drafts[code]={date:TODAY,v:{},ids,rir:{},readiness:'normal',planWeek:trainingWeekIndex(),edition:hypertrophyEdition(TODAY)?.date||null}}else if(FLAV!=='mary'&&(d.planWeek!==trainingWeekIndex()||d.edition!==(hypertrophyEdition(TODAY)?.date||null))){const ids=exList(code).map(e=>e.id);d.ids=ids;d.planWeek=trainingWeekIndex();d.edition=hypertrophyEdition(TODAY)?.date||null}return d}
 const half=x=>Math.round(x*2)/2;
 const restTxt=s=>s>=60?`${Math.floor(s/60)}:${pad(s%60)}`:`${s}s`;
 
@@ -1080,7 +1094,7 @@ function vHoje(){
  ${liveWatchCard()}
  ${spotifyCard()}
  ${recommendationCard(info)}
- <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular. Vê as próximas semanas no Plano.'}`}</div>`;
+ <div class="banner ${deload?'deload':''}">${deload?'<b>Semana 5 de 5: redução de esforço planeada.</b> Metade das séries e cerca de −10% de carga. Ajusta também à tua recuperação.':`<b>Semana ${wk} de 5</b> · ${rirTxt(wk)}. ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados e core.':'As edições semanais combinam variantes do mesmo grupo muscular e exercícios de referência para acompanhar a progressão. Vê as próximas semanas no Plano.'}`}</div>`;
  if(!code)return h+todayWatchCard()+'</div>';
  const s=SESS[code],d=draft(code);
  h+=`<div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${code} · ${s.dur}</p><h1>${s.name}</h1></div></div>
@@ -1196,7 +1210,11 @@ function vPlano(){
  let h=`<div class="stack"><div><p class="eyebrow">4 treinos em rotação · ciclo de 5 semanas</p><h1>O teu plano</h1></div>
  <div class="card stack"><h3>Sem dias fixos</h3><div class="sched">${ORDER.map(c=>`<div class="srow"><b>${c}</b><i style="background:var(--${SESS[c].cls})"></i><span>${SESS[c].name}</span></div>`).join('')}</div>
   <p class="muted" style="font-size:.92rem">Vais ao ginásio quando puderes e fazes sempre a próxima da fila. O ideal são 4 por semana. Depois de 2 dias seguidos, descansa 1. Nos dias livres, caminhada rápida de 30–40 min.${S.profile.goal==='perder'||S.profile.goal==='definir'?' Para perder gordura, os passos contam muito: tenta 8 000–10 000 por dia.':''}</p></div>`;
- if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve com as variantes desta semana e metade das séries.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
+ if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve com as variantes desta semana e metade das séries.':'As edições semanais combinam variantes do mesmo grupo muscular e exercícios de referência para acompanhar a progressão.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
+ if(FLAV!=='mary'){
+ const edition=hypertrophyEdition(editionDate(previewWeek));
+ if(edition)h+=`<section class="card stack"><h2>Edição de hipertrofia · ${dshort(edition.date)}</h2><p>Referências para progressão: supino inclinado na máquina, puxada à frente e flexão de pernas sentada. As variantes de peito, remada e quadríceps desta edição aparecem no plano abaixo.</p><p class="muted">Edições preparadas: 14 e 21 de novembro de 2026. A edição seguinte entra a 21 de novembro. Um treino com séries registadas mantém a seleção inicial.</p></section>`;
+ }
  if(FLAV!=='mary') h+=`<section class="card stack"><h2>Novas máquinas de hipertrofia</h2><p>Abre uma máquina para veres a execução. Em Hoje, podes escolhê-la antes de registar a primeira série desse exercício.</p>${novasMaquinas.map(v=>{const sl=SESS[v.code].ex[v.slot];return `<details><summary>Treino ${v.code} · ${v.n}</summary><p class="ex-meta num">${previewCycleWeek===5?Math.ceil(sl.sets/2):sl.sets} × ${sl.reps.join('–')} reps · descanso ${restTxt(sl.iso?sl.rest:Math.max(120,sl.rest))}</p>${pics(v)}<ul>${v.cues.map(c=>`<li>${c}</li>`).join('')}</ul></details>`}).join('')}</section>`;
  ORDER.forEach(c=>{const s=SESS[c];
   h+=`<div class="card"><div class="top"><div class="plate p-${s.cls} ${s.cls==='yellow'?'yellow':''}">${s.plate}</div><div><p class="eyebrow">Treino ${c} · ${s.dur}</p><h2>${s.name}</h2></div></div>
@@ -1211,7 +1229,7 @@ function vPlano(){
   <li><b>Ordem de cada treino:</b> ${FLAV==='mary'?'1) ativação, 2) por músculo — o composto e logo o isolado desse músculo, antes de passar ao seguinte, 3) core no fim.':'1) ativação leve, 2) compostos pesados, do músculo grande (peito, costas, coxas) para o pequeno (ombros, braços), 3) isolados, 4) core no fim. Levantas pesado com o músculo fresco.'}</li>
   <li><b>Esforço:</b> começa com 3 repetições em reserva (RIR), depois 2 e, quando recuperado, 1–2. Regista a reserva na última série; não precisas de procurar a falha.</li>
   <li><b>Volume e recuperação:</b> as séries não aumentam só por mudar a semana. Se estás cansado, a app reduz o treino proposto; preserva sempre as séries que já escreveste.</li>
-  <li><b>Variação dos exercícios:</b> ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados/core, com revisão após 3 registos comparáveis sem progresso.':'Os exercícios rodam todas as semanas dentro do mesmo grupo muscular. O ciclo seguinte continua a rotação. Os treinos A/B/C/D seguem o histórico e as cargas continuam separadas por exercício.'}</li>
+  <li><b>Variação dos exercícios:</b> ${FLAV==='mary'?'As máquinas mudam por blocos de sessões registadas: 6 nos compostos e 4 nos isolados/core, com revisão após 3 registos comparáveis sem progresso.':'As edições semanais combinam variantes do mesmo grupo muscular e exercícios de referência para acompanhar a progressão. O ciclo seguinte continua a rotação. Os treinos A/B/C/D seguem o histórico e as cargas continuam separadas por exercício.'}</li>
   <li><b>Progressão dupla:</b> ${FLAV==='mary'?'Atinge o topo da faixa com pelo menos uma repetição em reserva.':'Para subir, regista duas sessões no mesmo equipamento, com a mesma carga, todas as séries no topo da faixa e duas ou mais repetições em reserva.'} Os kg não passam de uma máquina para outra.</li>
   <li><b>Ritmo:</b> desce em 2–3 s, sobe com intenção. Sem balanços.</li>
   <li><b>Redução de esforço:</b> a 5.ª semana propõe metade das séries e −10% de carga. É uma estrutura de base; a recuperação de cada dia também conta.</li>
