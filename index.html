@@ -544,7 +544,8 @@ function weekStart(index){const start=Date.parse(S.start);return new Date((Numbe
 // Dated editions reuse illustrated IDs and preserve each slot's prescription.
 const HYPERTROPHY_EDITIONS=[
  {date:'2026-11-14',choices:{A:{0:'sup_incl_maq',1:'remada_alta_alavanca',2:'puxada'},B:{0:'prensa_pes_proximos',3:'leg_curl_s'},C:{0:'press_declinado_maq'}}},
- {date:'2026-11-21',choices:{A:{0:'sup_incl_maq',1:'remada_cabo',2:'puxada'},B:{0:'smith_squat',3:'leg_curl_s'},C:{0:'chest_press_incl'}}}
+ {date:'2026-11-21',choices:{A:{0:'sup_incl_maq',1:'remada_cabo',2:'puxada'},B:{0:'smith_squat',3:'leg_curl_s'},C:{0:'chest_press_incl'}}},
+ {date:'2026-11-28',choices:{A:{0:'sup_incl_maq',1:'remada_maq',2:'puxada'},B:{0:'leg_press',3:'leg_curl_s'},C:{0:'chest_press'}}}
 ];
 function hypertrophyEdition(date){
  return HYPERTROPHY_EDITIONS.filter(e=>e.date<=date).at(-1)||null;
@@ -1213,7 +1214,7 @@ function vPlano(){
  if(FLAV!=='mary')h+=`<section class="card stack"><h2>Treinos por semana</h2><label>Semana do plano<select id="plan-week" class="rotation-select">${Array.from({length:5},(_,offset)=>{const w=trainingWeekIndex()+offset;return `<option value="${offset}" ${offset===ui.planWeekOffset?'selected':''}>${offset===0?'Esta semana':'Daqui a '+offset+' semana'+(offset===1?'':'s')} · ${dshort(weekStart(w))} · semana ${w%5+1} de 5</option>`}).join('')}</select></label><p><b>Semana ${previewCycleWeek} de 5 · ciclo ${Math.floor(previewWeek/5)+1}</b> · ${rirTxt(previewCycleWeek)}</p><p class="muted">${previewCycleWeek===5?'Semana leve com as variantes desta semana e metade das séries.':'As edições semanais combinam variantes do mesmo grupo muscular e exercícios de referência para acompanhar a progressão.'} As variantes do catálogo voltam a aparecer nos ciclos seguintes. Consultar outra semana não altera o treino de hoje nem o histórico.</p>${ui.planWeekOffset===0?'<p class="muted">Se já começaste um treino ou trocaste uma variante, a tua seleção mantém-se em Hoje.</p>':''}</section>`;
  if(FLAV!=='mary'){
  const edition=hypertrophyEdition(editionDate(previewWeek));
- if(edition)h+=`<section class="card stack"><h2>Edição de hipertrofia · ${dshort(edition.date)}</h2><p>Referências para progressão: supino inclinado na máquina, puxada à frente e flexão de pernas sentada. As variantes de peito, remada e quadríceps desta edição aparecem no plano abaixo.</p><p class="muted">Edições preparadas: 14 e 21 de novembro de 2026. A edição seguinte entra a 21 de novembro. Um treino com séries registadas mantém a seleção inicial.</p></section>`;
+ if(edition)h+=`<section class="card stack"><h2>Edição de hipertrofia · ${dshort(edition.date)}</h2><p>Referências para progressão: supino inclinado na máquina, puxada à frente e flexão de pernas sentada. As variantes de peito, remada e quadríceps desta edição aparecem no plano abaixo.</p><p class="muted">Conteúdo preparado até ${dshort(HYPERTROPHY_EDITIONS.at(-1).date)}. Cada edição entra na data indicada. Um treino com séries registadas mantém a seleção inicial.</p></section>`;
  }
  if(FLAV!=='mary') h+=`<section class="card stack"><h2>Novas máquinas de hipertrofia</h2><p>Abre uma máquina para veres a execução. Em Hoje, podes escolhê-la antes de registar a primeira série desse exercício.</p>${novasMaquinas.map(v=>{const sl=SESS[v.code].ex[v.slot];return `<details><summary>Treino ${v.code} · ${v.n}</summary><p class="ex-meta num">${previewCycleWeek===5?Math.ceil(sl.sets/2):sl.sets} × ${sl.reps.join('–')} reps · descanso ${restTxt(sl.iso?sl.rest:Math.max(120,sl.rest))}</p>${pics(v)}<ul>${v.cues.map(c=>`<li>${c}</li>`).join('')}</ul></details>`}).join('')}</section>`;
  ORDER.forEach(c=>{const s=SESS[c];

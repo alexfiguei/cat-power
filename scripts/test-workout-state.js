@@ -451,7 +451,7 @@ function workout(id = 'strength', overrides = {}) {
   console.log('PASS: final-set timer stop, reduced-volume plans, undo/save cleanup; permission refresh/re-request, HR fallback, persistent empty/error guidance; exact imported summary and separate active/total calories.');
   const originalNow=now;
   const snapshots=[];
-  for(const date of ['2026-11-14','2026-11-21']){
+  for(const date of ['2026-11-14','2026-11-21','2026-11-28']){
     now=Date.parse(date+'T12:00:00Z');
     const edition=app();
     edition.read("S.start='2026-10-20';S.drafts={}");
@@ -483,6 +483,24 @@ function workout(id = 'strength', overrides = {}) {
   assert.equal(snapshots[1][1][0].id,'smith_squat');
   assert.equal(snapshots[0][2][0].id,'press_declinado_maq');
   assert.equal(snapshots[1][2][0].id,'chest_press_incl');
+  assert.equal(snapshots[2][0][1].id,'remada_maq');
+  assert.equal(snapshots[2][1][0].id,'leg_press');
+  assert.equal(snapshots[2][2][0].id,'chest_press');
+  for(const [code,slot] of [[0,0],[0,2],[1,3]])
+    assert.equal(snapshots[2][code][slot].id,snapshots[1][code][slot].id);
+  now=Date.parse('2026-11-21T12:00:00Z');
+  const nextEdition=app();
+  nextEdition.read("S.start='2026-10-20';S.drafts={}");
+  const beforePreview=nextEdition.read('JSON.stringify(S)');
+  assert.equal(nextEdition.read("exList('A',trainingWeekIndex()+1)[1].id"),'remada_maq');
+  assert.equal(nextEdition.read("exList('B',trainingWeekIndex()+1)[0].id"),'leg_press');
+  assert.equal(nextEdition.read("exList('C',trainingWeekIndex()+1)[0].id"),'chest_press');
+  assert.equal(nextEdition.read('JSON.stringify(S)'),beforePreview);
+  const editions=JSON.parse(nextEdition.read('JSON.stringify(HYPERTROPHY_EDITIONS)'));
+  assert.equal(new Set(editions.map(e=>e.date)).size,editions.length);
+  assert.deepEqual(editions.map(e=>e.date),editions.map(e=>e.date).sort());
+  assert.equal(nextEdition.read("hypertrophyEdition('2026-11-27').date"),'2026-11-21');
+  assert.equal(nextEdition.read("hypertrophyEdition('2026-11-28').date"),'2026-11-28');
   now=originalNow;
   console.log('PASS: weekly variant schedules, cycle rollover and deload, read-only future previews, upgrade/draft preservation, separate variant loads, legacy exposure blocks, effort/recovery persistence, no load increases at failure/pain, evolution reporting, nutrition data/adherence/cooldown/bounds.');
   console.log('PASS: workout persistence, monthly imports, chronological next-workout rotation and classification, exercise image association/zoom, exact duration, separate calories, actual HR graph/scrubbing, dense-sample peak preservation and error handling. Health Connect responses are mocked.');

@@ -38,3 +38,7 @@ Food targets continue to use the stored profile and explicit goal. A trend revie
 ## Editions reviewed 14 November 2026
 
 The APK includes dated editions for 14 and 21 November, reusing existing illustrated variant IDs. A0 incline machine press, A2 pulldown and B3 seated leg curl remain reference movements in both editions. A1 changes from high leverage row to seated cable row, B0 from close-stance leg press to Smith squat, and C0 from decline machine press to incline machine press. Existing slot sets, rep ranges and rest apply, including fifth-week reduced volume. These dates select content independently of the personal cycle start. Future previews advance the content date by the selected number of weeks. Entered drafts retain all identities. Empty drafts adopt the edition. Append later editions in chronological order, retain earlier dates and IDs, and avoid duplicate catalogue entries. Photographs are reused from the shipped catalogue. The existing compact three-day plan retains its own rotation.
+
+## Editions reviewed 21 November 2026
+
+Verified the existing 21 November edition and appended 28 November once. The next edition selects A1 converging machine row, B0 bilateral leg press and C0 flat machine chest press from the existing illustrated catalogue. It retains A0, A2 and B3 references, slot prescriptions and the current recovery/deload rules. The Plan summary now derives its latest prepared date from the edition list. Tests cover all three dates, the 27/28 November boundary, next-week preview isolation and reference retention.
